@@ -22,7 +22,10 @@
 #include "NVMeofGwTypes.h"
 
 using ceph::coarse_mono_clock;
-
+#define dout_context g_ceph_context
+#define dout_subsys ceph_subsys_mgr
+#undef dout_prefix
+#define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 /*-------------------*/
 class NVMeofGwMap
 {
@@ -52,7 +55,7 @@ private:
     void find_failover_candidate(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T grpid, bool &propose_pending);
     void find_failback_gw       (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, bool &found);
     void set_failover_gw_for_ANA_group (const GW_ID_T &failed_gw_id, const GROUP_KEY& group_key, const GW_ID_T &gw_id, const NQN_ID_T& nqn,
-		   ANA_GRP_ID_T groupid);
+                   ANA_GRP_ID_T groupid);
 
     void start_timer(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
     int  get_timer(const GW_ID_T &gw_id, GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
@@ -76,11 +79,15 @@ public:
         using ceph::decode;
         __u8 struct_v;
         decode(struct_v, bl);
+        dout(0) << "version: " << struct_v << dendl;
         ceph_assert(struct_v == 0);
         decode(epoch, bl);
+        dout(0) << "epoch: " << epoch << dendl;
 
         decode(Created_gws, bl);
+        dout(0) << "Created_gws: " << Created_gws << dendl;
         decode(Gmap, bl);
+        dout(0) << "Gmap: " << Gmap << dendl;
         if (full_decode) {
             decode(Gmetadata, bl);
         }
@@ -88,5 +95,6 @@ public:
 };
 
 #include "NVMeofGwSerialize.h"
+#undef dout_subsys
 
 #endif /* SRC_MON_NVMEOFGWMAP_H_ */
