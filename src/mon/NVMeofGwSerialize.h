@@ -292,6 +292,11 @@ inline std::ostream& operator<<(std::ostream& os, const GWMAP value) {
     return os;
 };
 
+inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
+    os << "GW_CREATED_T { ana_group_id " << value.ana_grp_id << " nonce_map " <<  value.nonce_map <<  " }";
+    return os;
+ }
+
 inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
     os << "NVMeofGwMap [ Gmap: ";
     for (auto& group_state: value.Gmap) {
@@ -299,11 +304,7 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
     }
     os << " ] [ Created_gws: ";
     for (auto& group_gws: value.Created_gws) {
-        os << " { " << group_gws.first << " } -> { ";
-        for (auto& gw: group_gws.second) {
-            os << " { gw_id " << gw.first << " } -> { " << gw.second.ana_grp_id << " }";
-	}
-        os << " }";
+        os << " { " << group_gws.first << " } -> { " << group_gws.second << " }";
     }
     os << "]";
     return os;

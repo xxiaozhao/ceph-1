@@ -384,26 +384,22 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     GW_AVAILABILITY_E  avail = m->get_availability();
     const GwSubsystems& subsystems =  m->get_subsystems();
     bool propose = false;
-    ANA_GRP_ID_T ana_grp_id = 0;
     std::vector<NQN_ID_T> configured_subsystems;
+    auto& group_gws = pending_map.Created_gws[group_key];
+    auto gw = group_gws.find(gw_id);
 
     if (avail == GW_AVAILABILITY_E::GW_CREATED){
-        // in this special state GWs receive map with just "created_gws" vector
-        auto& created_gw = pending_map.Created_gws[group_key][gw_id];
-        if(created_gw.ana_grp_id == ana_grp_id) {// GW is created administratively
-           dout(4) << "GW " << gw_id << " sent beacon being in state GW_WAIT_INITIAL_MAP" << dendl;
-           propose = true;
+	// new created gw detected
+	if (gw == group_gws.end()) {
+           pending_map.cfg_add_gw(gw_id, group_key);
+           dout(4) << "GW " << gw_id << " group_key " << group_key << " added to the pending Created_gws "<< pending_map.Created_gws <<dendl;
         }
-        else{
-           dout(4) << "GW " << gw_id << " sent beacon being in state GW_WAIT_INITIAL_MAP but it is not created yet!!! "<< dendl; 
-#ifdef BYPASS_GW_CREATE_CLI
-           pending_map.cfg_add_gw(gw_id);
-           dout(4) << "GW " << gw_id << " created since mode is bypass-create-cli "<< dendl;
-           propose= true;
-#endif
-        }
+	propose = true;
         goto set_propose;
     }
+
+    // At this stage the gw has to be in the Created_gws
+    ceph_assert (gw != group_gws.end());
 
     // Validation gw is in the database
     for (const NqnState &st : subsystems)
@@ -413,19 +409,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         if (gw_state == nqn_gws_states.end())
         {
             dout(4) <<  "GW + NQN pair is not in the  database: " << gw_id << " " << st.nqn << dendl;
-            // if GW is created
-            auto& group_gws = pending_map.Created_gws[group_key];
-            auto  gw_state = group_gws.find(gw_id);
-            if (gw_state != group_gws.end()) {
-                GW_STATE_T gst(ana_grp_id);
-                pending_map.Gmap[group_key][st.nqn][gw_id] = gst;
-                GW_METADATA_T md;
-                pending_map.Gmetadata[group_key][st.nqn][gw_id] = md;
-            }
-            else {
-                //drop beacon on the floor silently discard
-                return 0;
-            }
+            pending_map.Gmap[group_key][st.nqn][gw_id] = GW_STATE_T(gw->second.ana_grp_id);
         }
         configured_subsystems.push_back(st.nqn);
     }

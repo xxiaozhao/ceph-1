@@ -19,19 +19,6 @@ static ostream& _prefix(std::ostream *_dout, const NVMeofGwMap *h,//const Monito
     return *_dout << "gw-mon." << map->mon->name << "@" << map->mon->rank;
 }
 
-static std::string G_gw_avail[] = {
-                            "GW_CREATED", 
-                            "GW_AVAILAB", 
-                            "GW_UNAVAIL"};
-
-static std::string G_gw_ana_states[] = {
-                            "IDLE_STATE     ",
-                            "STANDBY_STATE  ",
-                            "ACTIVE_STATE   ",
-                            "BLOCKED_OWNER  ",
-                            "WAIT_FLBACK_RDY"
-};
-
 int  NVMeofGwMap::cfg_add_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key) {
     // Calculate allocated group bitmask
     bool allocated[MAX_SUPPORTED_ANA_GROUPS] = {false};
@@ -49,8 +36,7 @@ int  NVMeofGwMap::cfg_add_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key) {
             GW_CREATED_T gw_created(i);
             Created_gws[group_key][gw_id] = gw_created;
 
-            dout(4) << __func__ << "Created GW:  " << gw_id << " pool " << group_key.first << "group" << group_key.second
-                    << " grpid " <<  gw_created.ana_grp_id  <<  dendl;
+            dout(4) << __func__ << "Created GWS:  " << Created_gws  <<  dendl;
             return 0;
         }
     }
