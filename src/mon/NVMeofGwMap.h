@@ -92,6 +92,13 @@ public:
             decode(Gmetadata, bl);
         }
     }
+
+    void debug_encode_decode(){
+       ceph::buffer::list bl;
+       encode(bl);
+       auto p = bl.cbegin();
+       decode(p);
+    }
 };
 
 #include "NVMeofGwSerialize.h"

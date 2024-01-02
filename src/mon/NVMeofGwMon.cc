@@ -4,8 +4,6 @@
  *  Created on: Oct 17, 2023
  *      Author:
  */
-
-
 #include <boost/tokenizer.hpp>
 #include "include/stringify.h"
 #include "NVMeofGwMon.h"
@@ -36,6 +34,42 @@ void NVMeofGwMon::on_restart(){
 
 void NVMeofGwMon::on_shutdown() {}
 
+
+#ifdef INJECT
+static int cnt ;
+#define start_cnt 6
+void NVMeofGwMon::inject1(){
+    //bool propose = false;
+    if( ++cnt  == 4  ){// simulation that new configuration was added
+        std::string pool = "pool1";
+        std::string group = "grp1";
+        auto group_key = std::make_pair(pool, group);
+        pending_map.cfg_add_gw("GW1" ,group_key);
+        pending_map.cfg_add_gw("GW2" ,group_key);
+        pending_map.cfg_add_gw("GW3" ,group_key);
+        NONCE_VECTOR_T new_nonces = {"abc", "def","hij"};
+        //ANA_GRP_ID_T grp = 1;
+        //pending_map.update_gw_nonce("GW1.g1.p1", grp, new_nonces);
+        pending_map.Created_gws[group_key]["GW1"].nonce_map[1] = new_nonces;
+
+       // pending_map.update_gw_nonce("GW1.g1.p1", grp, new_nonces);
+        pending_map.Created_gws[group_key]["GW2"].nonce_map[2] = new_nonces;
+        GW_STATE_T gst1(1);
+        std::string nqn1 = "nqn2008.node1";
+        pending_map.Gmap[group_key][nqn1]["GW2"] = gst1;
+
+        GW_STATE_T gst2(2);
+        pending_map.Gmap[group_key][nqn1]["GW3"] = gst2;
+        dout(4) << pending_map << dendl;
+
+
+        pending_map.debug_encode_decode();
+        dout(4) << "Dump map after decode encode:" <<dendl;
+        dout(4) << pending_map << dendl;
+    }
+}
+#endif
+
 void NVMeofGwMon::tick(){
    // static int cnt=0;
     if(map.delay_propose){
@@ -49,7 +83,7 @@ void NVMeofGwMon::tick(){
     }
     bool _propose_pending = false;
   
-    //inject1();
+   // inject1();
     const auto now = ceph::coarse_mono_clock::now();
     const auto nvmegw_beacon_grace = g_conf().get_val<std::chrono::seconds>("mon_nvmeofgw_beacon_grace"); 
     dout(4) << MY_MON_PREFFIX << __func__  <<  "NVMeofGwMon leader got a real tick, pending epoch "<< pending_map.epoch     << dendl;
@@ -401,6 +435,11 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     // At this stage the gw has to be in the Created_gws
     ceph_assert (gw != group_gws.end());
 
+    // deep copy the whole nonce map of this GW
+    if(m->get_nonce_map().size()){
+       pending_map.Created_gws[group_key][gw_id].nonce_map = m->get_nonce_map();
+       dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key] [gw_id].nonce_map  << dendl;
+    }
     // Validation gw is in the database
     for (const NqnState &st : subsystems)
     {

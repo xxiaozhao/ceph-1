@@ -207,12 +207,18 @@ void NVMeofGw::send_beacon()
     }
     gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
   }
+  GW_ANA_NONCE_MAP  nonce_map;
+  if (gw_availability == GW_AVAILABILITY_E::GW_AVAILABLE){
+   //Simulation   nonce_map[1]= {"abc", "def", "hijk", "xuli"};
+  }
+
   dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
       name,
       pool,
       group,
       subs,
+      nonce_map,
       gw_availability,
       map.epoch);
   monc.send_mon_message(std::move(m));

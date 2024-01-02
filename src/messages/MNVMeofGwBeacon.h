@@ -32,6 +32,7 @@ protected:
     std::string              gw_pool;
     std::string              gw_group;
     GwSubsystems             subsystems;                           // gateway susbsystem and their state machine states
+    GW_ANA_NONCE_MAP         nonce_map;                            // map of ana-grp-id as keay and value - vector of ceph_entity_addresses
     GW_AVAILABILITY_E        availability;                         // in absence of  beacon  heartbeat messages it becomes inavailable
     uint32_t                 version;
 
@@ -44,17 +45,19 @@ public:
         const std::string& gw_pool_,
         const std::string& gw_group_,
         const GwSubsystems& subsystems_,
+        const GW_ANA_NONCE_MAP  &nonce_map,
         const GW_AVAILABILITY_E&  availability_,
         const uint32_t& version_
   )
     : PaxosServiceMessage{MSG_MNVMEOF_GW_BEACON, 0, HEAD_VERSION, COMPAT_VERSION},
-      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_),
+      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_),nonce_map(nonce_map),
       availability(availability_), version(version_)
   {}
 
   const std::string& get_gw_id() const { return gw_id; }
   const std::string& get_gw_pool() const { return gw_pool; }
   const std::string& get_gw_group() const { return gw_group; }
+  const GW_ANA_NONCE_MAP & get_nonce_map()const {return nonce_map;}
   const GW_AVAILABILITY_E& get_availability() const { return availability; }
   const uint32_t& get_version() const { return version; }
   const GwSubsystems& get_subsystems() const { return subsystems; };
@@ -81,6 +84,7 @@ public:
         encode((int)st.sm_state[i], payload);
       encode(st.opt_ana_gid, payload);
     }
+    encode(nonce_map, payload);
     encode((int)availability, payload);
     encode(version, payload); 
   }
@@ -110,6 +114,7 @@ public:
       decode(st.opt_ana_gid, p);
       subsystems.push_back(st);
     }
+    decode(nonce_map, p);
     decode(tmp, p);
     availability = static_cast<GW_AVAILABILITY_E>(tmp);
     decode(version, p);  
