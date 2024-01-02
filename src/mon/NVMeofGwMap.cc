@@ -11,13 +11,7 @@ using std::string;
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix _prefix(_dout, this, this)
-using namespace TOPNSPC::common;
-
-static ostream& _prefix(std::ostream *_dout, const NVMeofGwMap *h,//const Monitor &mon,
-        const NVMeofGwMap *map) {
-    return *_dout << "gw-mon." << map->mon->name << "@" << map->mon->rank;
-}
+#define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 
 int  NVMeofGwMap::cfg_add_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key) {
     // Calculate allocated group bitmask

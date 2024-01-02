@@ -23,14 +23,13 @@
 
 using ceph::coarse_mono_clock;
 #define dout_context g_ceph_context
-#define dout_subsys ceph_subsys_mgr
+#define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 /*-------------------*/
 class NVMeofGwMap
 {
 public:
-    Monitor*                            mon           = NULL;   // just for logs in the mon module file
     epoch_t                             epoch         = 0;      // epoch is for Paxos synchronization  mechanizm
     bool                                delay_propose = false;
 
@@ -92,16 +91,9 @@ public:
             decode(Gmetadata, bl);
         }
     }
-
-    void debug_encode_decode(){
-       ceph::buffer::list bl;
-       encode(bl);
-       auto p = bl.cbegin();
-       decode(p);
-    }
 };
 
-#include "NVMeofGwSerialize.h"
 #undef dout_subsys
+#include "NVMeofGwSerialize.h"
 
 #endif /* SRC_MON_NVMEOFGWMAP_H_ */

@@ -30,14 +30,9 @@
 #include "NVMeofGwMonitorGroupClient.h"
 
 #define dout_context g_ceph_context
-#define dout_subsys ceph_subsys_mgr
+#define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
-
-using std::map;
-using std::string;
-using std::stringstream;
-using std::vector;
 
 NVMeofGw::NVMeofGw(int argc, const char **argv) :
   Dispatcher(g_ceph_context),
@@ -207,10 +202,6 @@ void NVMeofGw::send_beacon()
     }
     gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
   }
-  GW_ANA_NONCE_MAP  nonce_map;
-  if (gw_availability == GW_AVAILABILITY_E::GW_AVAILABLE){
-   //Simulation   nonce_map[1]= {"abc", "def", "hijk", "xuli"};
-  }
 
   dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
@@ -218,7 +209,7 @@ void NVMeofGw::send_beacon()
       pool,
       group,
       subs,
-      nonce_map,
+      GW_ANA_NONCE_MAP(),
       gw_availability,
       map.epoch);
   monc.send_mon_message(std::move(m));
@@ -374,7 +365,7 @@ bool NVMeofGw::ms_dispatch2(const ref_t<Message>& m)
   return handled;
 }
 
-int NVMeofGw::main(vector<const char *> args)
+int NVMeofGw::main(std::vector<const char *> args)
 {
   client_messenger->wait();
 

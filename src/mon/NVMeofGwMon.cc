@@ -10,65 +10,24 @@
 #include "messages/MNVMeofGwBeacon.h"
 #include "messages/MNVMeofGwMap.h"
 
-using std::string;
+#define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix _prefix(_dout, this, this)
-using namespace TOPNSPC::common;
+#define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 
-static std::ostream& _prefix(std::ostream *_dout, const NVMeofGwMon *h,//const Monitor &mon,
-        const NVMeofGwMon *hmon) {
-    return *_dout << "gw-mon." << hmon->mon.name << "@" << hmon->mon.rank;
-}
-#define MY_MON_PREFFIX " NVMeGW "
+using std::string;
 
 void NVMeofGwMon::init(){
-    dout(4) << MY_MON_PREFFIX << __func__  <<  "called " << dendl;
+    dout(4) <<  "called " << dendl;
 }
 
 void NVMeofGwMon::on_restart(){
-    dout(4) << MY_MON_PREFFIX << __func__  <<  "called " << dendl;
+    dout(4) <<  "called " << dendl;
     last_beacon.clear();
     last_tick = ceph::coarse_mono_clock::now();
 }
 
 void NVMeofGwMon::on_shutdown() {}
-
-
-#ifdef INJECT
-static int cnt ;
-#define start_cnt 6
-void NVMeofGwMon::inject1(){
-    //bool propose = false;
-    if( ++cnt  == 4  ){// simulation that new configuration was added
-        std::string pool = "pool1";
-        std::string group = "grp1";
-        auto group_key = std::make_pair(pool, group);
-        pending_map.cfg_add_gw("GW1" ,group_key);
-        pending_map.cfg_add_gw("GW2" ,group_key);
-        pending_map.cfg_add_gw("GW3" ,group_key);
-        NONCE_VECTOR_T new_nonces = {"abc", "def","hij"};
-        //ANA_GRP_ID_T grp = 1;
-        //pending_map.update_gw_nonce("GW1.g1.p1", grp, new_nonces);
-        pending_map.Created_gws[group_key]["GW1"].nonce_map[1] = new_nonces;
-
-       // pending_map.update_gw_nonce("GW1.g1.p1", grp, new_nonces);
-        pending_map.Created_gws[group_key]["GW2"].nonce_map[2] = new_nonces;
-        GW_STATE_T gst1(1);
-        std::string nqn1 = "nqn2008.node1";
-        pending_map.Gmap[group_key][nqn1]["GW2"] = gst1;
-
-        GW_STATE_T gst2(2);
-        pending_map.Gmap[group_key][nqn1]["GW3"] = gst2;
-        dout(4) << pending_map << dendl;
-
-
-        pending_map.debug_encode_decode();
-        dout(4) << "Dump map after decode encode:" <<dendl;
-        dout(4) << pending_map << dendl;
-    }
-}
-#endif
 
 void NVMeofGwMon::tick(){
    // static int cnt=0;
@@ -78,15 +37,14 @@ void NVMeofGwMon::tick(){
     }
 
     if (!is_active() || !mon.is_leader()){
-        dout(4) << __func__  <<  " NVMeofGwMon leader : " << mon.is_leader() << "active : " << is_active()  << dendl;
+        dout(4) << "NVMeofGwMon leader : " << mon.is_leader() << "active : " << is_active()  << dendl;
         return;
     }
     bool _propose_pending = false;
   
-   // inject1();
     const auto now = ceph::coarse_mono_clock::now();
     const auto nvmegw_beacon_grace = g_conf().get_val<std::chrono::seconds>("mon_nvmeofgw_beacon_grace"); 
-    dout(4) << MY_MON_PREFFIX << __func__  <<  "NVMeofGwMon leader got a real tick, pending epoch "<< pending_map.epoch     << dendl;
+    dout(4) <<  "NVMeofGwMon leader got a real tick, pending epoch "<< pending_map.epoch     << dendl;
 
     const auto mgr_tick_period = g_conf().get_val<std::chrono::seconds>("mgr_tick_period");
 
@@ -95,7 +53,7 @@ void NVMeofGwMon::tick(){
         // This case handles either local slowness (calls being delayed
         // for whatever reason) or cluster election slowness (a long gap
         // between calls while an election happened)
-        dout(4) << __func__ << ": resetting beacon timeouts due to mon delay "
+        dout(4) << ": resetting beacon timeouts due to mon delay "
                 "(slow election?) of " << now - last_tick << " seconds" << dendl;
         for (auto &i : last_beacon) {
           i.second = now;
@@ -153,7 +111,7 @@ const char **NVMeofGwMon::get_tracked_conf_keys() const
 void NVMeofGwMon::handle_conf_change(const ConfigProxy& conf,
                                     const std::set<std::string> &changed)
 {
-  dout(4) << __func__ << " " << changed << dendl;
+  dout(4) << "changed " << changed << dendl;
 
   if (changed.count("nvmef_gw_mapdump")) {
       dout(4) << "pending_map " << pending_map << dendl;
@@ -168,12 +126,12 @@ void NVMeofGwMon::create_pending(){
     pending_map = map;// deep copy of the object
     // TODO  since "pending_map"  can be reset  each time during paxos re-election even in the middle of the changes ...
     pending_map.epoch++;
-    dout(4) <<  MY_MON_PREFFIX << __func__ << " pending " << pending_map  << dendl;
+    dout(4) << " pending " << pending_map  << dendl;
 }
 
 void NVMeofGwMon::encode_pending(MonitorDBStore::TransactionRef t){
 
-    dout(4) <<  MY_MON_PREFFIX << __func__  << dendl;
+    dout(4) <<  dendl;
     bufferlist bl;
     pending_map.encode(bl);
     put_version(t, pending_map.epoch, bl);
@@ -223,7 +181,7 @@ void NVMeofGwMon::check_sub(Subscription *sub)
 void NVMeofGwMon::check_subs(bool t)
 {
   const std::string type = "NVMeofGw";
-  dout(4) <<  MY_MON_PREFFIX << __func__ << " count " << mon.session_map.subs.count(type) << dendl;
+  dout(4) <<  "count " << mon.session_map.subs.count(type) << dendl;
 
   if (mon.session_map.subs.count(type) == 0){
       return;
@@ -236,7 +194,7 @@ void NVMeofGwMon::check_subs(bool t)
 }
 
 bool NVMeofGwMon::preprocess_query(MonOpRequestRef op){
-    dout(4) <<  MY_MON_PREFFIX <<__func__  << dendl;
+    dout(4) << dendl;
 
     auto m = op->get_req<PaxosServiceMessage>();
       switch (m->get_type()) {
@@ -261,7 +219,7 @@ bool NVMeofGwMon::preprocess_query(MonOpRequestRef op){
 }
 
 bool NVMeofGwMon::prepare_update(MonOpRequestRef op){
-    dout(4) <<  MY_MON_PREFFIX <<__func__  << dendl;
+    dout(4) << dendl;
     auto m = op->get_req<PaxosServiceMessage>();
       switch (m->get_type()) {
         case MSG_MNVMEOF_GW_BEACON:
@@ -286,7 +244,7 @@ bool NVMeofGwMon::prepare_update(MonOpRequestRef op){
 
 bool NVMeofGwMon::preprocess_command(MonOpRequestRef op)
 {
-    dout(4) << MY_MON_PREFFIX << __func__ << dendl;
+    dout(4) << dendl;
     auto m = op->get_req<MMonCommand>();
     std::stringstream ss;
     bufferlist rdata;
@@ -318,7 +276,7 @@ bool NVMeofGwMon::preprocess_command(MonOpRequestRef op)
 
 bool NVMeofGwMon::prepare_command(MonOpRequestRef op)
 {
-    dout(4) << MY_MON_PREFFIX << __func__ << dendl;
+    dout(4)  << dendl;
     auto m = op->get_req<MMonCommand>();
     int rc;
     std::stringstream ss;
@@ -391,7 +349,7 @@ bool NVMeofGwMon::prepare_command(MonOpRequestRef op)
 
 
 bool NVMeofGwMon::preprocess_beacon(MonOpRequestRef op){
-    dout(4) <<  MY_MON_PREFFIX <<__func__  << dendl;
+    dout(4)   << dendl;
     auto m = op->get_req<MNVMeofGwBeacon>();
      mon.no_reply(op); // we never reply to beacons
      dout(4) << "beacon from " << m->get_type() << dendl;
@@ -408,7 +366,7 @@ bool NVMeofGwMon::preprocess_beacon(MonOpRequestRef op){
 //#define BYPASS_GW_CREATE_CLI
 
 bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
-    dout(4) <<  MY_MON_PREFFIX <<__func__  << dendl;
+    dout(4)  << dendl;
     auto m = op->get_req<MNVMeofGwBeacon>();
 
     dout(4) << "availability " <<  m->get_availability() << " GW : " <<m->get_gw_id() << " subsystems " << m->get_subsystems() <<  " epoch " << m->get_version() << dendl;
@@ -438,7 +396,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     // deep copy the whole nonce map of this GW
     if(m->get_nonce_map().size()){
        pending_map.Created_gws[group_key][gw_id].nonce_map = m->get_nonce_map();
-       dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key] [gw_id].nonce_map  << dendl;
+       dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key][gw_id].nonce_map  << dendl;
     }
     // Validation gw is in the database
     for (const NqnState &st : subsystems)

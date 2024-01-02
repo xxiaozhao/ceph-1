@@ -46,8 +46,7 @@ class NVMeofGwMon: public PaxosService,
     std::vector<MonCommand> pending_command_descs;
 
 public:
-    NVMeofGwMon(Monitor &mn, Paxos &p, const std::string& service_name)
-    : PaxosService(mn, p, service_name)  {map.mon = &mn; }
+    NVMeofGwMon(Monitor &mn, Paxos &p, const std::string& service_name): PaxosService(mn, p, service_name) {}
     ~NVMeofGwMon() override {}
 
 
@@ -83,10 +82,6 @@ public:
 
     void check_subs(bool type);
     void check_sub(Subscription *sub);
-private:
-    void inject1();
-    void get_gw_and_nqn_from_key(std::string  key, GW_ID_T &gw_id , std::string& nqn);
-
 };
 
-#endif /* SRC_MON_NVMEGWMONITOR_H_ */
+#endif /* MON_NVMEGWMONITOR_H_ */

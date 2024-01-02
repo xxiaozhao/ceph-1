@@ -7,7 +7,7 @@
 #ifndef MON_NVMEOFGWSERIALIZE_H_
 #define MON_NVMEOFGWSERIALIZE_H_
 #define dout_context g_ceph_context
-#define dout_subsys ceph_subsys_mgr
+#define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 
@@ -24,7 +24,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_STATES_PER_AGROUP_E v
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_AVAILABILITY_E value) {
-  switch (value) {
+    switch (value) {
 
         case GW_AVAILABILITY_E::GW_CREATED: os << "CREATED"; break;
         case GW_AVAILABILITY_E::GW_AVAILABLE: os << "AVAILABLE"; break;
@@ -36,11 +36,11 @@ inline std::ostream& operator<<(std::ostream& os, const GW_AVAILABILITY_E value)
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
-    os << "GW_STATE_T [ \n (gw-mon) sm_state ";
+    os << "GW_STATE_T [ sm_state ";
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.sm_state[i] << ",";
     }
-    os <<  "] \n (gw-mon)  failover peers ";
+    os <<  "] failover peers ";
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.failover_peer[i] << ",";
     }
@@ -70,7 +70,7 @@ inline std::ostream& operator<<(std::ostream& os, const GWMAP value) {
     for (auto& nqn_state: value) {
         os << " { nqn: " << nqn_state.first << " -> ";
         for (auto& gw_state: nqn_state.second) {
-            os << "\n (gw-mon)  { gw_id: " << gw_state.first << " -> " <<  gw_state.second << "}";
+            os << "{ gw_id: " << gw_state.first << " -> " <<  gw_state.second << "}";
         }
         os << "}";
     }
@@ -79,7 +79,7 @@ inline std::ostream& operator<<(std::ostream& os, const GWMAP value) {
 
 
 inline std::ostream& operator<<(std::ostream& os, const NONCE_VECTOR_T value) {
-    for (auto & nonces : value){
+    for (auto & nonces : value) {
         os <<  nonces << " ";
     }
     return os;
@@ -87,11 +87,10 @@ inline std::ostream& operator<<(std::ostream& os, const NONCE_VECTOR_T value) {
 
 
 inline std::ostream& operator<<(std::ostream& os, const GW_ANA_NONCE_MAP value) {
-   if(value.size()) os << "\n";
-   for( auto &nonce_map : value){
-       os  << "(gw-mon)  " << "ana_grp: " << nonce_map.first  << " [ " << nonce_map.second << "] \n" ;
-   }
-   return os;
+    for (auto &nonce_map : value) {
+        os  << "ana_grp: " << nonce_map.first  << " [ " << nonce_map.second << "]" ;
+    }
+    return os;
 }
 
 
@@ -101,11 +100,10 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_MAP value) {
-     if(value.size()) os << "\n";
-      for( auto &gw_created_map : value){
-          os  << "(gw-mon)  " << "gw_id: " << gw_created_map.first  << " [ " << gw_created_map.second << "] \n" ;
-      }
-      return os;
+    for (auto &gw_created_map : value) {
+        os  <<  "gw_id: " << gw_created_map.first  << " [ " << gw_created_map.second << "]" ;
+    }
+    return os;
 }
 
 inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
@@ -113,9 +111,9 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
     for (auto& group_state: value.Gmap) {
         os << " { " << group_state.first << " } -> { " <<  group_state.second << " }";
     }
-    os << " ] \n(gw-mon) [ Created_gws: ";
+    os << " ] [ Created_gws: ";
     for (auto& group_gws: value.Created_gws) {
-        os << "\n(gw-mon) { " << group_gws.first << " } -> { " << group_gws.second << " }";
+        os << "{ " << group_gws.first << " } -> { " << group_gws.second << " }";
     }
     os << "]";
     return os;

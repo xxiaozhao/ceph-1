@@ -45,12 +45,12 @@ public:
         const std::string& gw_pool_,
         const std::string& gw_group_,
         const GwSubsystems& subsystems_,
-        const GW_ANA_NONCE_MAP  &nonce_map,
-        const GW_AVAILABILITY_E&  availability_,
+        const GW_ANA_NONCE_MAP& nonce_map,
+        const GW_AVAILABILITY_E& availability_,
         const uint32_t& version_
   )
     : PaxosServiceMessage{MSG_MNVMEOF_GW_BEACON, 0, HEAD_VERSION, COMPAT_VERSION},
-      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_),nonce_map(nonce_map),
+      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_), nonce_map(nonce_map),
       availability(availability_), version(version_)
   {}
 
