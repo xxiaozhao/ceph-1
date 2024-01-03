@@ -418,9 +418,9 @@ void NVMeofGwMap::fsm_handle_gw_delete (const GW_ID_T &gw_id, const GROUP_KEY& g
 
 void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T grpid,  bool &map_modified)
 {
-    auto& gw_state = Gmap[group_key][nqn][gw_id];
+    auto& fbp_gw_state = Gmap[group_key][nqn][gw_id];// GW in Fail-back preparation state fbp
 
-    if (gw_state.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED) {
+    if (fbp_gw_state.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED) {
 
         dout(4)  << "Expired Failback timer from GW " << gw_id << " ANA groupId "<< grpid <<  dendl;
 
@@ -429,7 +429,7 @@ void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& g
             auto& st = gw_state.second;
             if (st.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_BLOCKED_AGROUP_OWNER &&
                     st.availability == GW_AVAILABILITY_E::GW_AVAILABLE) {
-                st.standby_state(grpid);
+                fbp_gw_state.standby_state(grpid);
                 st.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE;
                 dout(4)  << "Failback from GW " << gw_id << " to " << gw_state.first << dendl;
                 map_modified = true;
@@ -440,7 +440,7 @@ void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& g
                     st.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE; // GW failed and started during the persistency interval
                     dout(4)  << "Failback unsuccessfull. GW: " << gw_state.first << "becomes Active for the ana group " << grpid  << dendl;
                 }
-                st.standby_state(grpid);
+                fbp_gw_state.standby_state(grpid);
                 dout(4)  << "Failback unsuccessfull GW: " << gw_id << "becomes standby for the ana group " << grpid  << dendl;
                 map_modified = true;
                 break;
