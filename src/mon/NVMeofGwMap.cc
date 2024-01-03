@@ -213,16 +213,18 @@ void NVMeofGwMap::handle_abandoned_ana_groups(bool& propose)
 /*
     sync our sybsystems from the beacon. systems subsystems not in beacon are removed.
 */
-void  NVMeofGwMap::handle_removed_subsystems (const std::vector<NQN_ID_T> &current_subsystems, const GROUP_KEY& group_key, bool &propose_pending)
+void  NVMeofGwMap::handle_removed_subsystems (const GW_ID_T& gw_id, const GROUP_KEY& group_key, const std::vector<NQN_ID_T> &current_subsystems,  bool &propose_pending)
 {
+    propose_pending = false;;
     auto& nqn_gws_states = Gmap[group_key];
-    for (auto it = nqn_gws_states.begin(); it != nqn_gws_states.end(); ) {
+    for (auto it = nqn_gws_states.begin(); it != nqn_gws_states.end(); ++it) {
         if (std::find(current_subsystems.begin(), current_subsystems.end(), it->first) == current_subsystems.end()) {
-            // Erase the susbsystem nqn if the nqn is not in the current subsystems
-            it = nqn_gws_states.erase(it);
-        } else {
-            // Move to the next pair
-            ++it;
+            // Erase the gateway susbsystem state if the nqn is not in the current subsystems
+            auto gw_it = it->second.find(gw_id);
+            if (gw_it != it->second.end()) {
+               it->second.erase(gw_it);
+               propose_pending = true;
+            }
         }
     }
 }

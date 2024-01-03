@@ -191,8 +191,9 @@ void NVMeofGw::send_beacon()
     if (ok) {
       for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
         const subsystem& sub = gw_subsystems.subsystems(i);
+        if (sub.listen_addresses_size() == 0) continue; // don't publish subsytems without listeners
         struct NqnState nqn_state(sub.nqn());
-	auto group_key = std::make_pair(pool, group);
+        auto group_key = std::make_pair(pool, group);
         GW_STATE_T& gw_state = map.Gmap[group_key][nqn_state.nqn][name];
         nqn_state.opt_ana_gid = gw_state.optimized_ana_group_id;
         for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)

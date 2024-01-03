@@ -44,7 +44,7 @@ public:
     int   process_gw_map_gw_down        (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, bool &propose_pending);
     void  update_active_timers          (bool &propose_pending);
     void  handle_abandoned_ana_groups   (bool &propose_pending);
-    void  handle_removed_subsystems     (const std::vector<NQN_ID_T> &current_subsystems, const GROUP_KEY& group_key, bool &propose_pending);
+    void  handle_removed_subsystems     (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const std::vector<NQN_ID_T> &current_subsystems, bool &propose_pending);
 
 private:
     void fsm_handle_gw_down    (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);

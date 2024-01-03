@@ -27,6 +27,8 @@
 using namespace std;
 
 void test_NVMeofGwMap() {
+  dout(0) << __func__ << "\n\n" << dendl;
+
   NVMeofGwMap pending_map;
   std::string pool = "pool1";
   std::string group = "grp1";
@@ -54,6 +56,32 @@ void test_NVMeofGwMap() {
   dout(0) << pending_map << dendl;
 }
 
+void test_NVMeofGwMap_handle_removed() {
+  dout(0) << __func__ << "\n\n" << dendl;
+  auto group_key = std::make_pair("pool", "group");
+  std::string nqn = "nqn2008.node1";
+
+  NVMeofGwMap pending_map;
+  pending_map.Gmap[group_key][nqn]["GW1"] = GW_STATE_T(1);
+  pending_map.Gmap[group_key][nqn]["GW2"] = GW_STATE_T(2);
+  pending_map.Gmap[group_key][nqn]["GW3"] = GW_STATE_T(2);
+  dout(0) << "Initial: " << pending_map << dendl;
+
+  bool proposed;
+  pending_map.handle_removed_subsystems("GW2", group_key, {}, proposed);
+  dout(0) << "After remove: " << pending_map << dendl;
+  ceph_assert(proposed);
+  auto& nqn_map = pending_map.Gmap[group_key][nqn];
+  ceph_assert(nqn_map.size() == 2);
+  ceph_assert(nqn_map.find("GW2") == nqn_map.end());
+
+  pending_map.handle_removed_subsystems("GW1", group_key, { nqn }, proposed);
+  dout(0) << "After non proposed remove: " << pending_map << dendl;
+  ceph_assert(!proposed);
+  ceph_assert(nqn_map.size() == 2);
+}
+
+
 int main(int argc, const char **argv)
 {
   // Init ceph
@@ -65,5 +93,6 @@ int main(int argc, const char **argv)
 
   // Run tests
   test_NVMeofGwMap();
+  test_NVMeofGwMap_handle_removed();
 }
 

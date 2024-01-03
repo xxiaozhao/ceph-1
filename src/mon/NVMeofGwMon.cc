@@ -410,7 +410,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         }
         configured_subsystems.push_back(st.nqn);
     }
-    pending_map.handle_removed_subsystems( configured_subsystems, group_key, propose );
+    pending_map.handle_removed_subsystems(gw_id, group_key, configured_subsystems, propose);
 
     if(avail == GW_AVAILABILITY_E::GW_AVAILABLE)
     {
