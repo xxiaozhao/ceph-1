@@ -46,7 +46,7 @@ class NVMeofGwMon: public PaxosService,
     std::vector<MonCommand> pending_command_descs;
 
 public:
-    NVMeofGwMon(Monitor &mn, Paxos &p, const std::string& service_name): PaxosService(mn, p, service_name) {}
+    NVMeofGwMon(Monitor &mn, Paxos &p, const std::string& service_name): PaxosService(mn, p, service_name) {map.mon = &mn; }
     ~NVMeofGwMon() override {}
 
 

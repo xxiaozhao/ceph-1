@@ -9,7 +9,7 @@
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
+#define dout_prefix *_dout << MODULE_PREFFIX << __PRETTY_FUNCTION__ << " "
 
 inline std::ostream& operator<<(std::ostream& os, const GW_STATES_PER_AGROUP_E value) {
     switch (value) {
@@ -18,6 +18,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_STATES_PER_AGROUP_E v
         case GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE: os << "ACTIVE "; break;
         case GW_STATES_PER_AGROUP_E::GW_BLOCKED_AGROUP_OWNER: os << "BLOCKED_AGROUP_OWNER "; break;
         case GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED: os << "WAIT_FAILBACK_PREPARED "; break;
+        case GW_STATES_PER_AGROUP_E::GW_WAIT_FAILOVER_PREPARED: os << "WAIT_FAILOVER_PREPARED "; break;
         default: os << "Invalid " << (int)value << " ";
     }
     return os;
@@ -36,15 +37,15 @@ inline std::ostream& operator<<(std::ostream& os, const GW_AVAILABILITY_E value)
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
-    os << "GW_STATE_T [ sm_state ";
+    os << "\n"<< MODULE_PREFFIX << "GW_STATE_T [ sm_state :";
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.sm_state[i] << ",";
     }
-    os <<  "] failover peers ";
+    os <<  "]\n"<< MODULE_PREFFIX << " failover peers ";
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.failover_peer[i] << ",";
     }
-    os << "] availability " << value.availability << " version " << value.version << "]";
+    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << " version " << value.version << "]";
     return os;
 };
 
@@ -87,8 +88,9 @@ inline std::ostream& operator<<(std::ostream& os, const NONCE_VECTOR_T value) {
 
 
 inline std::ostream& operator<<(std::ostream& os, const GW_ANA_NONCE_MAP value) {
+    if(value.size()) os << "\n" << MODULE_PREFFIX;
     for (auto &nonce_map : value) {
-        os  << "ana_grp: " << nonce_map.first  << " [ " << nonce_map.second << "]" ;
+        os  << "  ana_grp: " << nonce_map.first  << " [ " << nonce_map.second << "]\n"<< MODULE_PREFFIX ;
     }
     return os;
 }
@@ -100,8 +102,9 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_MAP value) {
+    if(value.size()) os << "\n" << MODULE_PREFFIX;;
     for (auto &gw_created_map : value) {
-        os  <<  "gw_id: " << gw_created_map.first  << " [ " << gw_created_map.second << "]" ;
+        os  <<  "gw_id: " << gw_created_map.first  << " [ " << gw_created_map.second << "] \n"<< MODULE_PREFFIX; ;
     }
     return os;
 }
@@ -111,7 +114,7 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
     for (auto& group_state: value.Gmap) {
         os << " { " << group_state.first << " } -> { " <<  group_state.second << " }";
     }
-    os << " ] [ Created_gws: ";
+    os << " ] \n" << MODULE_PREFFIX <<"[ Created_gws: ";
     for (auto& group_gws: value.Created_gws) {
         os << "{ " << group_gws.first << " } -> { " << group_gws.second << " }";
     }
@@ -126,6 +129,9 @@ inline void encode(const GW_STATE_T& state, ceph::bufferlist &bl) {
     for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
         encode((state.failover_peer[i]), bl);
     }
+    for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
+            encode((state.osd_epochs[i]), bl);
+    }
     encode(state.optimized_ana_group_id, bl);
     encode((int)state.availability, bl);
     encode(state.version, bl);
@@ -134,6 +140,7 @@ inline void encode(const GW_STATE_T& state, ceph::bufferlist &bl) {
 inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
     int sm_state;
     GW_ID_T peer_name;
+    epoch_t epoch;
     for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
         decode(sm_state, bl);
         state.sm_state[i] = (GW_STATES_PER_AGROUP_E)  sm_state;
@@ -141,6 +148,10 @@ inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
     for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
         decode(peer_name, bl);
         state.failover_peer[i] = peer_name;
+    }
+    for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
+        decode(epoch, bl);
+        state.osd_epochs[i] = epoch;
     }
     decode(state.optimized_ana_group_id, bl);
     int avail;
@@ -151,16 +162,21 @@ inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
 
 inline  void encode(const GW_METADATA_T& state, ceph::bufferlist &bl) {
     for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
-        int tick = state.anagrp_sm_tstamps[i];
-        encode( tick, bl);
-     }
+        int    tick = state.data[i].anagrp_sm_tstamps;
+        uint8_t val = state.data[i].timer_value;
+        encode(tick, bl);
+        encode(val,  bl);
+    }
 }
 
 inline  void decode(GW_METADATA_T& state,  ceph::bufferlist::const_iterator& bl) {
     for(int i = 0; i <MAX_SUPPORTED_ANA_GROUPS; i ++){
         int tick;
+        uint8_t val;
         decode(tick, bl);
-        state.anagrp_sm_tstamps[i] = tick;
+        decode(val,  bl);
+        state.data[i].anagrp_sm_tstamps = tick;
+        state.data[i].timer_value = val;
     }
 }
 
@@ -244,12 +260,12 @@ inline void decode(std::map<GROUP_KEY, GW_CREATED_MAP>& created_gws, ceph::buffe
 
 inline void encode(const SUBSYST_GWMAP& subsyst_gwmap,  ceph::bufferlist &bl) {
     encode(subsyst_gwmap.size(), bl);
-    dout(0) << "number gateways: " << subsyst_gwmap.size() << dendl;
+   // dout(0) << "number gateways: " << subsyst_gwmap.size() << dendl;
     for (auto& subsyst: subsyst_gwmap) {
         encode(subsyst.first, bl);
-        dout(0) << "gateway id: " << subsyst.first << dendl;
+     //   dout(0) << "gateway id: " << subsyst.first << dendl;
         encode(subsyst.second, bl);
-        dout(0) << "gateway state: " << subsyst.second << dendl;
+   //     dout(0) << "gateway state: " << subsyst.second << dendl;
     }
 }
 
@@ -257,15 +273,15 @@ inline void decode(SUBSYST_GWMAP& subsyst_gwmap, ceph::buffer::list::const_itera
     subsyst_gwmap.clear();
     size_t num_gws;
     decode(num_gws, bl);
-    dout(0) << "number gateways: " << num_gws << dendl;
+    //dout(0) << "number gateways: " << num_gws << dendl;
 
     for (size_t i = 0; i < num_gws; i++) {
         GW_ID_T gw_id;
         decode(gw_id, bl);
-        dout(0) << "gw_id: " << gw_id << dendl;
+   //     dout(0) << "gw_id: " << gw_id << dendl;
         GW_STATE_T gw_st;
         decode(gw_st, bl);
-        dout(0) << "gw_st: " << gw_st << dendl;
+    //    dout(0) << "gw_st: " << gw_st << dendl;
         subsyst_gwmap[gw_id] = gw_st;
     }
 }
@@ -282,31 +298,31 @@ inline void decode(GWMAP& nqn_gws_states, ceph::buffer::list::const_iterator &bl
     nqn_gws_states.clear();
     size_t num_subsystems;
     decode(num_subsystems, bl);
-    dout(0) << "size: " << num_subsystems << dendl;
+    //dout(0) << "size: " << num_subsystems << dendl;
 
     for (size_t i = 0; i < num_subsystems; i++) {
         std::string nqn;
         decode(nqn, bl);
-        dout(0) << "nqn: " << nqn << dendl;
+       // dout(0) << "nqn: " << nqn << dendl;
         SUBSYST_GWMAP gw_map;
         decode(gw_map, bl);
-        dout(0) << "SUBSYST_GWMAP: " << gw_map << dendl;
+     //   dout(0) << "SUBSYST_GWMAP: " << gw_map << dendl;
         nqn_gws_states[nqn] = gw_map;
     }
 }
 
 inline void encode(const std::map<GROUP_KEY, GWMAP>& gmap,  ceph::bufferlist &bl) {
     encode (gmap.size(), bl); // number of groups
-    dout(0) << "size: " << gmap.size() << dendl;
+    //dout(0) << "size: " << gmap.size() << dendl;
     for (auto& group_state: gmap) {
         auto& group_key = group_state.first;
         encode(group_key.first, bl); // pool
-        dout(0) << "pool: " << group_key.first << dendl;
+     //   dout(0) << "pool: " << group_key.first << dendl;
         encode(group_key.second, bl); // group
-        dout(0) << "group: " << group_key.second << dendl;
+     //   dout(0) << "group: " << group_key.second << dendl;
 
         encode(group_state.second, bl);
-        dout(0) << "GWMAP: " << group_state.second << dendl;
+    //    dout(0) << "GWMAP: " << group_state.second << dendl;
     }
 }
 
@@ -314,15 +330,15 @@ inline void decode(std::map<GROUP_KEY, GWMAP>& gmap, ceph::buffer::list::const_i
     gmap.clear();
     size_t ngroups;
     decode(ngroups, bl);
-    dout(0) << "ngroups: " << ngroups << dendl;
+   // dout(0) << "ngroups: " << ngroups << dendl;
     for(size_t i = 0; i<ngroups; i++){
         std::string pool, group;
         decode(pool, bl);
         decode(group, bl);
-        dout(0) << "pool: " << pool << " group: " << group << dendl;
+      //  dout(0) << "pool: " << pool << " group: " << group << dendl;
         GWMAP grp_map;
         decode(grp_map, bl);
-        dout(0) << "GWMAP: " << grp_map << dendl;
+     //   dout(0) << "GWMAP: " << grp_map << dendl;
         gmap[std::make_pair(pool, group)] = grp_map;
     }
 }

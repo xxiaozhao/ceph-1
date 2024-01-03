@@ -22,7 +22,8 @@ enum class GW_STATES_PER_AGROUP_E {
     GW_STANDBY_STATE,
     GW_ACTIVE_STATE,
     GW_BLOCKED_AGROUP_OWNER,
-    GW_WAIT_FAILBACK_PREPARED
+    GW_WAIT_FAILBACK_PREPARED,
+    GW_WAIT_FAILOVER_PREPARED // wait blocklist completed
 };
 
 enum class GW_AVAILABILITY_E {
@@ -55,6 +56,7 @@ typedef std::vector<NqnState> GwSubsystems;
 struct GW_STATE_T {
     SM_STATE                sm_state;                      // state machine states per ANA group
     GW_ID_T                 failover_peer[MAX_SUPPORTED_ANA_GROUPS];
+    epoch_t                 osd_epochs   [MAX_SUPPORTED_ANA_GROUPS];
     ANA_GRP_ID_T            optimized_ana_group_id;        // optimized ANA group index as configured by Conf upon network entry, note for redundant GW it is FF
     GW_AVAILABILITY_E       availability;                  // in absence of  beacon  heartbeat messages it becomes inavailable
     uint64_t                version;                                    // version per all GWs of the same subsystem. subsystem version
@@ -77,11 +79,15 @@ struct GW_STATE_T {
 };
 
 struct GW_METADATA_T {
-   int  anagrp_sm_tstamps[MAX_SUPPORTED_ANA_GROUPS]; // statemachine timer(timestamp) set in some state
+   struct{
+      uint32_t     anagrp_sm_tstamps; // statemachine timer(timestamp) set in some state
+      uint8_t      timer_value;
+   } data[MAX_SUPPORTED_ANA_GROUPS];
 
     GW_METADATA_T() {
         for (int i=0; i<MAX_SUPPORTED_ANA_GROUPS; i++){
-            anagrp_sm_tstamps[i] = INVALID_GW_TIMER;
+            data[i].anagrp_sm_tstamps = INVALID_GW_TIMER;
+            data[i].timer_value = 0;
         }
     };
 };

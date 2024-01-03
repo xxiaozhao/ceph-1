@@ -25,11 +25,13 @@ using ceph::coarse_mono_clock;
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
-#define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
+#define MODULE_PREFFIX "nvmeofgw "
+#define dout_prefix *_dout << MODULE_PREFFIX << __PRETTY_FUNCTION__ << " "
 /*-------------------*/
 class NVMeofGwMap
 {
 public:
+    Monitor*                            mon           = NULL;
     epoch_t                             epoch         = 0;      // epoch is for Paxos synchronization  mechanizm
     bool                                delay_propose = false;
 
@@ -47,17 +49,19 @@ public:
     void  handle_removed_subsystems     (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const std::vector<NQN_ID_T> &current_subsystems, bool &propose_pending);
 
 private:
+    GW_CREATED_T&   find_already_created_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key);
     void fsm_handle_gw_down    (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
     void fsm_handle_gw_delete  (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
+    void fsm_handle_gw_alive   (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, GW_STATE_T & gw_state, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
     void fsm_handle_to_expired (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T grpid,  bool &map_modified);
 
     void find_failover_candidate(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T grpid, bool &propose_pending);
     void find_failback_gw       (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, bool &found);
     void set_failover_gw_for_ANA_group (const GW_ID_T &failed_gw_id, const GROUP_KEY& group_key, const GW_ID_T &gw_id, const NQN_ID_T& nqn,
                    ANA_GRP_ID_T groupid);
-
-    void start_timer(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
-    int  get_timer(const GW_ID_T &gw_id, GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
+    int  blocklist_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T ANA_groupid);
+    void start_timer (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid, uint8_t value);
+    int  get_timer   (const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
     void cancel_timer(const GW_ID_T &gw_id, const GROUP_KEY& group_key, const NQN_ID_T& nqn, ANA_GRP_ID_T anagrpid);
 
 public:
@@ -78,15 +82,15 @@ public:
         using ceph::decode;
         __u8 struct_v;
         decode(struct_v, bl);
-        dout(0) << "version: " << struct_v << dendl;
+        //dout(0) << "version: " << struct_v << dendl;
         ceph_assert(struct_v == 0);
         decode(epoch, bl);
-        dout(0) << "epoch: " << epoch << dendl;
+       // dout(0) << "epoch: " << epoch << dendl;
 
         decode(Created_gws, bl);
-        dout(0) << "Created_gws: " << Created_gws << dendl;
+       //dout(0) << "Created_gws: " << Created_gws << dendl;
         decode(Gmap, bl);
-        dout(0) << "Gmap: " << Gmap << dendl;
+       // dout(0) << "Gmap: " << Gmap << dendl;
         if (full_decode) {
             decode(Gmetadata, bl);
         }
