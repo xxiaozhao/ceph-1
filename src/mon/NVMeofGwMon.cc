@@ -351,7 +351,7 @@ bool NVMeofGwMon::prepare_command(MonOpRequestRef op)
 bool NVMeofGwMon::preprocess_beacon(MonOpRequestRef op){
     dout(4)   << dendl;
     auto m = op->get_req<MNVMeofGwBeacon>();
-     mon.no_reply(op); // we never reply to beacons
+     //mon.no_reply(op); // we never reply to beacons
      dout(4) << "beacon from " << m->get_type() << dendl;
      MonSession *session = op->get_session();
      if (!session){
@@ -437,6 +437,8 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         }
     }
 set_propose:
+     auto msg = make_message<MNVMeofGwMap>( NVMeofGwMap::create_null_map());
+     mon.send_reply(op, msg.detach());
     if (propose){
       dout(4) << "decision to delayed_map in prepare_beacon" <<dendl;
       return true;

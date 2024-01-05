@@ -264,6 +264,11 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
 {
   dout(0) << "handle nvmeof gw map" << dendl;
   auto &mp = mmap->get_map();
+
+  if(mp.epoch == 0xffffffff){
+      dout(0) << "received Beacon Ack " << mp.epoch << dendl;
+      return;  //TODO make proper handling of mon keepalive
+  }
   dout(0) << "received map epoch " << mp.epoch << dendl;
   dout(0) << "mp " << mp <<  dendl;
   ana_info ai;
