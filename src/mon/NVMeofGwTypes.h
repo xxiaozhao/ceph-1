@@ -59,12 +59,14 @@ struct GW_STATE_T {
     epoch_t                 osd_epochs   [MAX_SUPPORTED_ANA_GROUPS];
     ANA_GRP_ID_T            optimized_ana_group_id;        // optimized ANA group index as configured by Conf upon network entry, note for redundant GW it is FF
     GW_AVAILABILITY_E       availability;                  // in absence of  beacon  heartbeat messages it becomes inavailable
-    uint64_t                version;                                    // version per all GWs of the same subsystem. subsystem version
+    uint64_t                version;                       // version per all GWs of the same subsystem. subsystem version
+    bool                    no_listeners;                  // this GW has no  listeners for the defined  subsystem
 
     GW_STATE_T(ANA_GRP_ID_T id):
         optimized_ana_group_id(id),
         availability(GW_AVAILABILITY_E::GW_CREATED),
-        version(0)
+        version(0),
+        no_listeners(true)
     {
         for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
             sm_state[i] = GW_STATES_PER_AGROUP_E::GW_IDLE_STATE;

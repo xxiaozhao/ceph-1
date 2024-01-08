@@ -217,7 +217,7 @@ void NVMeofGwMap::handle_abandoned_ana_groups(bool& propose)
 }
 
 /*
-    sync our sybsystems from the beacon. systems subsystems not in beacon are removed.
+    sync our sybsystems from the beacon. systems subsystems not in beacon GWs are marked no_listeners.
 */
 void  NVMeofGwMap::handle_removed_subsystems (const GW_ID_T& gw_id, const GROUP_KEY& group_key, const std::vector<NQN_ID_T> &current_subsystems,  bool &propose_pending)
 {
@@ -227,9 +227,22 @@ void  NVMeofGwMap::handle_removed_subsystems (const GW_ID_T& gw_id, const GROUP_
         if (std::find(current_subsystems.begin(), current_subsystems.end(), it->first) == current_subsystems.end()) {
             // Erase the gateway susbsystem state if the nqn is not in the current subsystems
             auto gw_it = it->second.find(gw_id);
-            if (gw_it != it->second.end()) {
-               it->second.erase(gw_it);
-               propose_pending = true;
+            if (gw_it != it->second.end()) { //it->second.erase(gw_it);
+               if(gw_it->second.no_listeners == false){
+                  dout(4) << "GW " << gw_it->first << "seems currently has no listeners in subsystem " << it->first << dendl;
+                  gw_it->second.no_listeners = true;
+
+                  for(int i=0; i<MAX_SUPPORTED_ANA_GROUPS; i++) {
+                     bool propose = false;
+                     fsm_handle_gw_down (gw_id, group_key, it->first, gw_it->second.sm_state[i], i, propose);
+                     propose_pending |= propose;
+                  }
+                  gw_it->second.availability = GW_AVAILABILITY_E::GW_UNAVAILABLE;// GW becomes unavailable in the internal database
+               }
+            }
+            else{
+                gw_it->second.no_listeners = false; // gw-id was found both in current subsystem and in the internal map
+                propose_pending = false;
             }
         }
     }

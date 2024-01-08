@@ -45,7 +45,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.failover_peer[i] << ",";
     }
-    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << " version " << value.version << "]";
+    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << " no listeners " << value.no_listeners << "]";
     return os;
 };
 
@@ -135,6 +135,7 @@ inline void encode(const GW_STATE_T& state, ceph::bufferlist &bl) {
     encode(state.optimized_ana_group_id, bl);
     encode((int)state.availability, bl);
     encode(state.version, bl);
+    encode(state.no_listeners, bl);
 }
 
 inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
@@ -158,6 +159,7 @@ inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
     decode(avail, bl);
     state.availability = (GW_AVAILABILITY_E)avail;
     decode(state.version, bl);
+    decode(state.no_listeners, bl);
 }
 
 inline  void encode(const GW_METADATA_T& state, ceph::bufferlist &bl) {
