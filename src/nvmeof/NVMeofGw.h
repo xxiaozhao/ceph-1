@@ -37,7 +37,6 @@ private:
   std::string server_key;
   std::string server_cert;
   std::string client_cert;
-  std::list<std::string> subsystem_nqns;
 
 protected:
   ceph::async::io_context_pool poolctx;

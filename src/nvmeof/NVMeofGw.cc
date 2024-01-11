@@ -189,14 +189,12 @@ void NVMeofGw::send_beacon()
     subsystems_info gw_subsystems;
     bool ok = gw_client.get_subsystems(gw_subsystems);
     if (ok) {
-      subsystem_nqns.clear();
       for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
         const subsystem& sub = gw_subsystems.subsystems(i);
         if (sub.listen_addresses_size() == 0) continue; // don't publish subsytems without listeners
         struct NqnState nqn_state(sub.nqn());
-	subsystem_nqns.push_back(sub.nqn());
         auto group_key = std::make_pair(pool, group);
-        GW_STATE_T& gw_state = map.Gmap[group_key][name];
+        GW_STATE_T& gw_state = map.Gmap[group_key][nqn_state.nqn][name];
         nqn_state.opt_ana_gid = gw_state.optimized_ana_group_id;
         for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
           nqn_state.sm_state[i] = gw_state.sm_state[i];
@@ -305,8 +303,9 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
   if (subsystems == mp.Gmap.end()) {
       dout(0) << "Gmap find failed for group_key " <<  group_key << dendl;
   } else {
-    for (const auto& nqn: subsystem_nqns) {
-      const auto& idStateMap = subsystems->second;
+    for (const auto& subsystemPair: subsystems->second) {
+      const auto& nqn = subsystemPair.first;
+      const auto& idStateMap = subsystemPair.second;
       nqn_ana_states nas;
       nas.set_nqn(nqn);
 
@@ -317,7 +316,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
       if (new_gateway_state == idStateMap.end()) continue;
 
       // Previously monitor distributed state
-      GW_STATE_T& old_gw_state = map.Gmap[group_key][name];
+      GW_STATE_T& old_gw_state = map.Gmap[group_key][nqn][name];
 
       // Iterate over possible ANA Groups
       for (ANA_GRP_ID_T  ana_grp_index = 0; ana_grp_index < MAX_SUPPORTED_ANA_GROUPS; ana_grp_index++) {

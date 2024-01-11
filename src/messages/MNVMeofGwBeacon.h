@@ -109,7 +109,7 @@ public:
       NqnState st(nqn);
       for (int j = 0; j < MAX_SUPPORTED_ANA_GROUPS; j++) {
         decode(tmp, p);
-        st.sm_state[j] = static_cast<GW_EXPORTED_STATES_PER_AGROUP_E>(tmp);
+        st.sm_state[j] = static_cast<GW_STATES_PER_AGROUP_E>(tmp);
       }
       decode(st.opt_ana_gid, p);
       subsystems.push_back(st);
