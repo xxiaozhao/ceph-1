@@ -74,13 +74,13 @@ void NVMeofGwMon::tick(){
         auto& lb = itr.first;
         auto last_beacon_time = itr.second;
         if(last_beacon_time < cutoff){
-            dout(4) << "beacon timeout for GW " << lb.gw_id << " nqn " << lb.nqn << dendl;
-            pending_map.process_gw_map_gw_down( lb.gw_id, lb.group_key, lb.nqn, propose);
+            dout(4) << "beacon timeout for GW " << lb.gw_id << dendl;
+            pending_map.process_gw_map_gw_down( lb.gw_id, lb.group_key, propose);
             _propose_pending |= propose;
             last_beacon.erase(lb);
         }
         else {
-           dout(4) << "beacon live for GW key: " << lb.gw_id << " nqn " << lb.nqn << dendl;
+           dout(4) << "beacon live for GW key: " << lb.gw_id << dendl;
         }
     }
 
@@ -113,7 +113,7 @@ void NVMeofGwMon::handle_conf_change(const ConfigProxy& conf,
 {
   dout(4) << "changed " << changed << dendl;
 
-  if (changed.count("nvmef_gw_mapdump")) {
+  if (changed.count("nvmf_mon_mapdump")) {
       dout(4) << "pending_map " << pending_map << dendl;
   }
   if (changed.count("nvmf_mon_log_level")){
@@ -376,7 +376,6 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     GW_AVAILABILITY_E  avail = m->get_availability();
     const GwSubsystems& subsystems =  m->get_subsystems();
     bool propose = false;
-    std::vector<NQN_ID_T> configured_subsystems;
     auto& group_gws = pending_map.Created_gws[group_key];
     auto gw = group_gws.find(gw_id);
 
@@ -401,16 +400,16 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     // Validation gw is in the database
     for (const NqnState &st : subsystems)
     {
-        auto& nqn_gws_states = pending_map.Gmap[group_key][st.nqn];
+        auto& nqn_gws_states = pending_map.Gmap[group_key];
         auto  gw_state = nqn_gws_states.find(gw_id);
         if (gw_state == nqn_gws_states.end())
         {
-            dout(4) <<  "GW + NQN pair is not in the  database: " << gw_id << " " << st.nqn << dendl;
-            pending_map.Gmap[group_key][st.nqn][gw_id] = GW_STATE_T(gw->second.ana_grp_id);
+            dout(4) <<  "GW  is not in the  database: " << gw_id << " " << st.nqn << dendl;
+            pending_map.Gmap[group_key][gw_id] = GW_STATE_T(gw->second.ana_grp_id);
+            break;
         }
-        configured_subsystems.push_back(st.nqn);
     }
-    pending_map.handle_removed_subsystems(gw_id, group_key, configured_subsystems, propose);
+    //pending_map.handle_removed_subsystems(gw_id, group_key, configured_subsystems, propose);
 
     if(avail == GW_AVAILABILITY_E::GW_AVAILABLE)
     {
@@ -418,21 +417,23 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         // check pending_map.epoch vs m->get_version() - if different - drop the beacon
 
         for (const NqnState& st: subsystems) {
-            LastBeacon lb = { gw_id, group_key, st.nqn };
+            LastBeacon lb = {gw_id, group_key};
             last_beacon[lb] = now;
-            pending_map.process_gw_map_ka( gw_id, group_key, st.nqn, propose );
+            pending_map.process_gw_map_ka(gw_id, group_key, propose);
+            break;
         }
     }
     else if(avail == GW_AVAILABILITY_E::GW_UNAVAILABLE){ // state set by GW client application
         //  TODO: remove from last_beacon if found . if gw was found in last_beacon call process_gw_map_gw_down
 
         for (const NqnState& st: subsystems) {
-            LastBeacon lb = { gw_id, group_key, st.nqn };
+            LastBeacon lb = {gw_id, group_key};
 
             auto it = last_beacon.find(lb);
             if (it != last_beacon.end()){
                 last_beacon.erase(lb);
-                pending_map.process_gw_map_gw_down( gw_id, group_key, st.nqn, propose );
+                pending_map.process_gw_map_gw_down(gw_id, group_key, propose);
+                break;
             }
         }
     }

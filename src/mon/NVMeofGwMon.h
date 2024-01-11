@@ -12,19 +12,16 @@
 struct LastBeacon {
     GW_ID_T gw_id;
     GROUP_KEY group_key;
-    NQN_ID_T nqn;
 
     // Comparison operators to allow usage as a map key
     bool operator<(const LastBeacon& other) const {
         if (gw_id != other.gw_id) return gw_id < other.gw_id;
-        if (group_key != other.group_key) return group_key < other.group_key;
-        return nqn < other.nqn;
+        return group_key < other.group_key;
     }
 
     bool operator==(const LastBeacon& other) const {
         return gw_id == other.gw_id &&
-		group_key == other.group_key &&
-		nqn == other.nqn;
+		group_key == other.group_key;
     }
 };
 
