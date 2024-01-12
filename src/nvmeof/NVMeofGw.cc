@@ -194,10 +194,11 @@ void NVMeofGw::send_beacon()
         if (sub.listen_addresses_size() == 0) continue; // don't publish subsytems without listeners
         struct NqnState nqn_state(sub.nqn());
         auto group_key = std::make_pair(pool, group);
-        GW_STATE_T& gw_state = map.Gmap[group_key][nqn_state.nqn][name];
-        nqn_state.opt_ana_gid = gw_state.optimized_ana_group_id;
-        for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-          nqn_state.sm_state[i] = gw_state.sm_state[i];
+        GW_STATE_T& gw_state = map.Gmap[group_key][name];
+        //nqn_state. = gw_state.optimized_ana_group_id;
+        if(!gw_state.subsystems.empty())
+            for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
+               nqn_state.sm_state[i] = gw_state.subsystems[0].sm_state[i];
         subs.push_back(nqn_state);
       }
     }
@@ -298,51 +299,37 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
     }
   }
 
-  // Interate over NQNs
-  auto subsystems = mp.Gmap.find(group_key);
-  if (subsystems == mp.Gmap.end()) {
-      dout(0) << "Gmap find failed for group_key " <<  group_key << dendl;
-  } else {
-    for (const auto& subsystemPair: subsystems->second) {
-      const auto& nqn = subsystemPair.first;
-      const auto& idStateMap = subsystemPair.second;
-      nqn_ana_states nas;
-      nas.set_nqn(nqn);
+  // Previously monitor distributed state
+  SM_EXPORTED_STATE& old_gw_state = map.Gmap[group_key][name];
+  const auto& idStateMap = mp.Gmap.find(group_key);
+  if (idStateMap == mp.Gmap.end()) {
+      dout(0) << "Failed to find new state map for " << group_key << dendl;
+      return;
+  }
+  const auto& new_gateway_state = idStateMap->second.find(name);
 
-      // This gateway state for the current subsystem / nqn
-      const auto& new_gateway_state = idStateMap.find(name);
+  // Iterate over possible ANA Groups
+  for (ANA_GRP_ID_T  ana_grp_index = 0; ana_grp_index < MAX_SUPPORTED_ANA_GROUPS; ana_grp_index++) {
+    ana_group_state gs;
+    gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
 
-      // There is no subsystem update for this gateway
-      if (new_gateway_state == idStateMap.end()) continue;
+    // There is no state change for this ANA Group
+    auto old_state = old_gw_state.sm_state[ana_grp_index];
+    if (old_state == new_gateway_state->second.sm_state[ana_grp_index]) continue;
 
-      // Previously monitor distributed state
-      GW_STATE_T& old_gw_state = map.Gmap[group_key][nqn][name];
-
-      // Iterate over possible ANA Groups
-      for (ANA_GRP_ID_T  ana_grp_index = 0; ana_grp_index < MAX_SUPPORTED_ANA_GROUPS; ana_grp_index++) {
-        ana_group_state gs;
-        gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
-
-        // There is no state change for this ANA Group
-        auto old_state = old_gw_state.sm_state[ana_grp_index];
-        if (old_state == new_gateway_state->second.sm_state[ana_grp_index]) continue;
-
-        // detect was active, but not any more transition
-        if ((old_state == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE || old_state == GW_STATES_PER_AGROUP_E::GW_IDLE_STATE ) &&
-            new_gateway_state->second.sm_state[ana_grp_index] != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
-          gs.set_state(INACCESSIBLE); // Set the ANA state
-          nas.mutable_states()->Add(std::move(gs));
-          dout(0) << "nqn: " <<  nqn << " grpid " << (ana_grp_index + 1) << " INACCESSIBLE" <<dendl;
-        // detect was not active, but becaome one transition
-        } else if (old_state != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE &&
-            new_gateway_state->second.sm_state[ana_grp_index] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
-          gs.set_state(OPTIMIZED); // Set the ANA state
-          nas.mutable_states()->Add(std::move(gs));
-          dout(0) << "nqn: " <<  nqn << " grpid " << (ana_grp_index + 1) << " OPTIMIZED" <<dendl;
-        } else continue; // Avoid dealing with intermediate states.
-      }
-      if (nas.states_size()) ai.mutable_states()->Add(std::move(nas));
-    }
+    // detect was active, but not any more transition
+    if ((old_state == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE || old_state == GW_STATES_PER_AGROUP_E::GW_IDLE_STATE ) &&
+        new_gateway_state->second.sm_state[ana_grp_index] != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
+      gs.set_state(INACCESSIBLE); // Set the ANA state
+      ai.mutable_states()->Add(std::move(gs));
+      dout(0) << " grpid " << (ana_grp_index + 1) << " INACCESSIBLE" <<dendl;
+    // detect was not active, but becaome one transition
+    } else if (old_state != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE &&
+        new_gateway_state->second.sm_state[ana_grp_index] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
+      gs.set_state(OPTIMIZED); // Set the ANA state
+      ai.mutable_states()->Add(std::move(gs));
+      dout(0) << " grpid " << (ana_grp_index + 1) << " OPTIMIZED" <<dendl;
+    } else continue; // Avoid dealing with intermediate states.
   }
   if (ai.states_size()) {
     bool set_ana_state = false;

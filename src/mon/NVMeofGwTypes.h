@@ -26,6 +26,11 @@ enum class GW_STATES_PER_AGROUP_E {
     GW_WAIT_FAILOVER_PREPARED // wait blocklist completed
 };
 
+enum class GW_EXPORTED_STATES_PER_AGROUP_E {
+    GW_EXPORTED_OPTIMIZED_STATE = 0,
+    GW_EXPORTED_INACCESSIBLE_STATE = 0,
+};
+
 enum class GW_AVAILABILITY_E {
     GW_CREATED = 0,
     GW_AVAILABLE,
@@ -37,48 +42,70 @@ enum class GW_AVAILABILITY_E {
 #define INVALID_GW_TIMER     0xffff
 #define REDUNDANT_GW_ANA_GROUP_ID 0xFF
 
-typedef GW_STATES_PER_AGROUP_E SM_STATE[MAX_SUPPORTED_ANA_GROUPS];
+typedef GW_STATES_PER_AGROUP_E          SM_STATE         [MAX_SUPPORTED_ANA_GROUPS];
+typedef GW_EXPORTED_STATES_PER_AGROUP_E SM_EXPORTED_STATE[MAX_SUPPORTED_ANA_GROUPS];
 
 struct NqnState {
-    std::string nqn;          // subsystem NQN
-    SM_STATE    sm_state;     // susbsystem's state machine state
-    uint16_t    opt_ana_gid;  // optimized ANA group index
+    std::string         nqn;          // subsystem NQN
+    SM_EXPORTED_STATE   sm_state;     // susbsystem's state machine state   //SM_EXPORTED_STATE
 
     // Default constructor
-    NqnState(const std::string& _nqn) : nqn(_nqn), opt_ana_gid(0) {
+    NqnState(const std::string& _nqn) : nqn(_nqn)  {
         for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-            sm_state[i] = GW_STATES_PER_AGROUP_E::GW_IDLE_STATE;
+            sm_state[i] = GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE;
     }
 };
 
 typedef std::vector<NqnState> GwSubsystems;
 
 struct GW_STATE_T {
-    SM_STATE                sm_state;                      // state machine states per ANA group
-    GW_ID_T                 failover_peer[MAX_SUPPORTED_ANA_GROUPS];
-    epoch_t                 osd_epochs   [MAX_SUPPORTED_ANA_GROUPS];
-    ANA_GRP_ID_T            optimized_ana_group_id;        // optimized ANA group index as configured by Conf upon network entry, note for redundant GW it is FF
-    GW_AVAILABILITY_E       availability;                  // in absence of  beacon  heartbeat messages it becomes inavailable
-    uint64_t                version;                       // version per all GWs of the same subsystem. subsystem version
-    bool                    no_listeners;                  // this GW has no  listeners for the defined  subsystem
+   // SM_EXPORTED_STATE         sm_state;                      // SM NVMe states per ANA group
+    ANA_GRP_ID_T              optimized_ana_group_id;        // optimized ANA group index as configured by Conf upon network entry, note for redundant GW it is FF
+    uint64_t                  version;                       // reserved for future usage TBD
+    GwSubsystems              subsystems;
 
     GW_STATE_T(ANA_GRP_ID_T id):
         optimized_ana_group_id(id),
-        availability(GW_AVAILABILITY_E::GW_CREATED),
-        version(0),
-        no_listeners(true)
+        version(0)
     {
-        for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-            sm_state[i] = GW_STATES_PER_AGROUP_E::GW_IDLE_STATE;
+       // for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++)sm_state[i] = GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE;
     };
 
     GW_STATE_T() : GW_STATE_T(REDUNDANT_GW_ANA_GROUP_ID) {};
+};
+
+using NONCE_VECTOR_T    = std::vector<std::string>;
+using GW_ANA_NONCE_MAP  = std::map <ANA_GRP_ID_T, NONCE_VECTOR_T>;
+
+struct GW_CREATED_T {
+    ANA_GRP_ID_T       ana_grp_id; // ana-group-id allocated for this GW, GW owns this group-id
+    GW_AVAILABILITY_E  availability;                  // in absence of  beacon  heartbeat messages it becomes inavailable
+    GW_ANA_NONCE_MAP   nonce_map;
+    bool               no_listeners;                  // this GW has no  listeners for the defined  subsystem
+    SM_STATE           sm_state;                      // state machine states per ANA group
+    GW_ID_T            failover_peer[MAX_SUPPORTED_ANA_GROUPS];
+    struct{
+       epoch_t     osd_epoch;
+    }blocklist_data[MAX_SUPPORTED_ANA_GROUPS];
+
+    GW_CREATED_T(): ana_grp_id(REDUNDANT_GW_ANA_GROUP_ID) {};
+
+    GW_CREATED_T(ANA_GRP_ID_T id): ana_grp_id(id), availability(GW_AVAILABILITY_E::GW_CREATED), no_listeners(true)
+    {
+        for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++){
+            sm_state[i] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
+            failover_peer[i]  = "";
+            blocklist_data[i].osd_epoch = 0xffffffff;
+        }
+    };
 
     void standby_state(ANA_GRP_ID_T grpid) {
-        sm_state[grpid]       = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
-        failover_peer[grpid]  = "";
+           sm_state[grpid]       = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
+           failover_peer[grpid]  = "";
     };
 };
+
+
 
 struct GW_METADATA_T {
    struct{
@@ -94,22 +121,13 @@ struct GW_METADATA_T {
     };
 };
 
-using GWMAP               = std::map <NQN_ID_T, std::map<GW_ID_T, GW_STATE_T> >;
-using GWMETADATA          = std::map <NQN_ID_T, std::map<GW_ID_T, GW_METADATA_T> >;
-using SUBSYST_GWMAP       = std::map<GW_ID_T, GW_STATE_T>;
-using SUBSYST_GWMETA      = std::map<GW_ID_T, GW_METADATA_T>;
-
-using NONCE_VECTOR_T      = std::vector<std::string>;
-using GW_ANA_NONCE_MAP    = std::map <ANA_GRP_ID_T, NONCE_VECTOR_T>;
+using GWMAP               = std::map<GW_ID_T, GW_STATE_T>;
+using GWMETADATA          = std::map<GW_ID_T, GW_METADATA_T>;
 
 
-struct GW_CREATED_T {
-    ANA_GRP_ID_T     ana_grp_id; // ana-group-id allocated for this GW, GW owns this group-id
-    GW_ANA_NONCE_MAP nonce_map;
 
-    GW_CREATED_T(): ana_grp_id(REDUNDANT_GW_ANA_GROUP_ID) {};
-    GW_CREATED_T(ANA_GRP_ID_T id): ana_grp_id(id) {};
-};
+
+
 
 using GW_CREATED_MAP      = std::map<GW_ID_T, GW_CREATED_T>;
 
