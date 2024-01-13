@@ -11,6 +11,15 @@
 #undef dout_prefix
 #define dout_prefix *_dout << MODULE_PREFFIX << __PRETTY_FUNCTION__ << " "
 
+inline std::ostream& operator<<(std::ostream& os, const GW_EXPORTED_STATES_PER_AGROUP_E value) {
+    switch (value) {
+        case GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE: os << "OPTIMIZED "; break;
+        case GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE: os << "INACCESSIBLE "; break;
+        default: os << "Invalid " << (int)value << " ";
+    }
+    return os;
+}
+
 inline std::ostream& operator<<(std::ostream& os, const GW_STATES_PER_AGROUP_E value) {
     switch (value) {
         case GW_STATES_PER_AGROUP_E::GW_IDLE_STATE: os << "IDLE "; break;
@@ -36,13 +45,6 @@ inline std::ostream& operator<<(std::ostream& os, const GW_AVAILABILITY_E value)
     return os;
 }
 
-inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
-    os << "\n"<< MODULE_PREFFIX << "GW_STATE_T [ optimized ANA_grp " << value.optimized_ana_group_id;
-    // TODO
-
-    return os;
-};
-
 inline std::ostream& operator<<(std::ostream& os, const SM_STATE value) {
     os << "SM_STATE [ ";
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) os << value[i];
@@ -50,10 +52,40 @@ inline std::ostream& operator<<(std::ostream& os, const SM_STATE value) {
     return os;
 }
 
-inline std::ostream& operator<<(std::ostream& os, const NqnState value) {
-    os << "Subsystem( nqn: " << value.nqn << ", " << value.sm_state << " )";
+inline std::ostream& operator<<(std::ostream& os, const BeaconNamespace value) {
+    os << "BeaconNamespace( anagrpid:" << value.anagrpid << ", nonce:" << value.nonce <<" )";
     return os;
 }
+
+inline std::ostream& operator<<(std::ostream& os, const BeaconListener value) {
+    os << "BeaconListener( addrfam:" << value.address_family
+                        << ", addr:" << value.address
+                        << ", svcid:" << value.svcid << " )";
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const BeaconSubsystem value) {
+    os << "BeaconSubsystem( nqn:" << value.nqn << ", listeners [ ";
+    for (const auto& list: value.listeners) os << list << " ";
+    os << "] namespaces [ ";
+    for (const auto& ns: value.namespaces) os << ns << " ";
+    os << "] )";
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const NqnState value) {
+    os << "NqnState( nqn: " << value.nqn << ", " << value.ana_state << " )";
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
+    os <<  "GW_STATE_T { group id: " << value.group_id
+        << " GwSubsystems: [ ";
+    for (const auto& sub: value.subsystems) os << sub.second << " ";
+    os << " ] }";
+
+    return os;
+};
 
 inline std::ostream& operator<<(std::ostream& os, const GROUP_KEY value) {
     os << "GROUP_KEY {" << value.first << "," << value.second << "}";
@@ -65,11 +97,10 @@ inline std::ostream& operator<<(std::ostream& os, const GWMAP value) {
     for (auto& gw_state: value) {
         os << "\n" << MODULE_PREFFIX <<" { == gw_id: " << gw_state.first << " -> " <<  gw_state.second << "}";
     }
-     os << "}";
+    os << "}";
 
     return os;
 };
-
 
 inline std::ostream& operator<<(std::ostream& os, const NONCE_VECTOR_T value) {
     for (auto & nonces : value) {
@@ -77,7 +108,6 @@ inline std::ostream& operator<<(std::ostream& os, const NONCE_VECTOR_T value) {
     }
     return os;
 }
-
 
 inline std::ostream& operator<<(std::ostream& os, const GW_ANA_NONCE_MAP value) {
     if(value.size()) os << "\n" << MODULE_PREFFIX;
@@ -101,7 +131,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.failover_peer[i] << ",";
     }
-    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << " no listeners " << value.no_listeners << "]";
+    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << "]";
 
     return os;
 }
@@ -115,11 +145,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_MAP value) {
 }
 
 inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
-    os << "NVMeofGwMap [ Gmap: ";
-    for (auto& group_state: value.Gmap) {
-        os << " { " << group_state.first << " } -> { " <<  group_state.second << " }";
-    }
-    os << " ] \n" << MODULE_PREFFIX <<"[ Created_gws: ";
+    os << "NVMeofGwMap [ Created_gws: ";
     for (auto& group_gws: value.Created_gws) {
         os << "{ " << group_gws.first << " } -> { " << group_gws.second << " }";
     }
@@ -127,45 +153,54 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
     return os;
 }
 
+inline void encode(const ANA_STATE& st,  ceph::bufferlist &bl) {
+    encode(st.size(), bl);
+    for (const auto& gr: st)
+        encode((int)gr, bl);
+}
+
+inline void decode(ANA_STATE& st, ceph::buffer::list::const_iterator &bl) {
+    size_t n;
+    decode(n, bl);
+    st.reserve(n);
+    for (size_t i = 0; i < n; i++) {
+        int a;
+        decode(a, bl);
+        st[i] = (GW_EXPORTED_STATES_PER_AGROUP_E)a;
+    }
+}
 
 inline void encode(const GwSubsystems& subsystems,  ceph::bufferlist &bl) {
     encode(subsystems.size(), bl);
-    for(size_t i=0; i<subsystems.size(); i++){
-        encode(subsystems[i].nqn,bl);
-        //encode(subsystems[i].sm_state);
-        for(int j = 0; j <MAX_SUPPORTED_ANA_GROUPS; j ++){
-             encode((int)(subsystems[i].sm_state[j]), bl);
-        }
+    for (const auto& sub: subsystems){
+        encode(sub.second.nqn, bl);
+        encode(sub.second.ana_state, bl);
     }
+}
+
+inline  void decode(GwSubsystems& subsystems,  ceph::bufferlist::const_iterator& bl) {
+  size_t num_subsystems;
+  decode(num_subsystems, bl);
+  subsystems.clear();
+  for (size_t i=0; i<num_subsystems; i++){
+     std::string  nqn;
+     decode(nqn, bl);
+     ANA_STATE st;
+     decode(st, bl);
+     subsystems.insert({nqn, NqnState(nqn, st)});
+  }
 }
 
 inline void encode(const GW_STATE_T& state,  ceph::bufferlist &bl) {
 
-    encode(state.optimized_ana_group_id, bl);
+    encode(state.group_id, bl);
     encode(state.version, bl);
     encode (state.subsystems, bl);
 }
 
-inline  void decode(GwSubsystems& subsystems,  ceph::bufferlist::const_iterator& bl) {
-
-  size_t num_subsystems;
-  decode(num_subsystems, bl);
-  for(size_t i=0; i<num_subsystems; i++){
-     std::string  nqn;
-     decode(nqn, bl);
-     NqnState nqnstate(nqn);
-     for(int j = 0; j <MAX_SUPPORTED_ANA_GROUPS; j ++){
-         int sm_state;
-         decode(sm_state, bl);
-         nqnstate.sm_state[j] = (GW_EXPORTED_STATES_PER_AGROUP_E)sm_state;
-     }
-     subsystems.push_back(nqnstate);
-  }
-}
-
 inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
 
-    decode(state.optimized_ana_group_id, bl);
+    decode(state.group_id, bl);
     decode(state.version, bl);
     decode(state.subsystems, bl);
 }
@@ -229,7 +264,6 @@ inline void encode(const GW_CREATED_MAP& gws,  ceph::bufferlist &bl) {
             encode((gw.second.failover_peer[i]), bl);
         }
         encode((int)gw.second.availability, bl);
-        encode(gw.second.no_listeners, bl);
 
         for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++)
             encode(gw.second.blocklist_data[i].osd_epoch, bl);
@@ -262,7 +296,6 @@ inline void decode(GW_CREATED_MAP& gws, ceph::buffer::list::const_iterator &bl) 
         int avail;
         decode(avail, bl);
         gw_created.availability = (GW_AVAILABILITY_E)avail;
-        decode(gw_created.no_listeners, bl);
 
         for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++)
             decode(gw_created.blocklist_data[i].osd_epoch, bl);
@@ -403,6 +436,59 @@ inline void decode(GWMETADATA& md, ceph::buffer::list::const_iterator &bl) {
         md[gw_id] = gw_meta;
     }
 }
+
+inline void encode(const BeaconNamespace& ns,  ceph::bufferlist &bl) {
+    encode(ns.anagrpid, bl);
+    encode(ns.nonce, bl);
+}
+
+inline void decode(BeaconNamespace& ns, ceph::buffer::list::const_iterator &bl) {
+    decode(ns.anagrpid, bl);
+    decode(ns.nonce, bl);
+}
+
+inline void encode(const BeaconListener& ls,  ceph::bufferlist &bl) {
+    encode(ls.address_family, bl);
+    encode(ls.address, bl);
+    encode(ls.svcid, bl);
+}
+
+inline void decode(BeaconListener& ls, ceph::buffer::list::const_iterator &bl) {
+    decode(ls.address_family, bl);
+    decode(ls.address, bl);
+    decode(ls.svcid, bl);
+}
+
+inline void encode(const BeaconSubsystem& sub,  ceph::bufferlist &bl) {
+    encode(sub.nqn, bl);
+    encode(sub.listeners.size(), bl);
+    for (const auto& ls: sub.listeners)
+        encode(ls, bl);
+    encode(sub.namespaces.size(), bl);
+    for (const auto& ns: sub.namespaces)
+        encode(ns, bl);
+}
+
+inline void decode(BeaconSubsystem& sub, ceph::buffer::list::const_iterator &bl) {
+    decode(sub.nqn, bl);
+    size_t s;
+    sub.listeners.clear();
+    decode(s, bl);
+    for (size_t i = 0; i < s; i++) {
+        BeaconListener ls;
+        decode(ls, bl);
+        sub.listeners.push_back(ls);
+    }
+
+    sub.namespaces.clear();
+    decode(s, bl);
+    for (size_t i = 0; i < s; i++) {
+        BeaconNamespace ns;
+        decode(ns, bl);
+        sub.namespaces.push_back(ns);
+    }
+}
+
 
 #undef dout_subsys
 #endif /* SRC_MON_NVMEOFGWSERIALIZEP_H_ */

@@ -35,10 +35,9 @@ public:
     epoch_t                             epoch         = 0;      // epoch is for Paxos synchronization  mechanizm
     bool                                delay_propose = false;
 
-    // State: GMAP and Created_gws are sent to the clients, while Gmetadata is not
-    std::map<GROUP_KEY, GWMAP>          Gmap;
     std::map<GROUP_KEY, GW_CREATED_MAP> Created_gws;
     std::map<GROUP_KEY, GWMETADATA>     Gmetadata;
+    void to_gmap(std::map<GROUP_KEY, GWMAP>& Gmap) const;
 
     int   cfg_add_gw                    (const GW_ID_T &gw_id, const GROUP_KEY& group_key);
     int   cfg_delete_gw                 (const GW_ID_T &gw_id, const GROUP_KEY& group_key);
@@ -59,8 +58,6 @@ private:
     void find_failback_gw       (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  bool &found);
     void set_failover_gw_for_ANA_group (const GW_ID_T &failed_gw_id, const GROUP_KEY& group_key, const GW_ID_T &gw_id,
                                                                                                      ANA_GRP_ID_T groupid);
-    void copy_sm_change_to_gmap (const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T grpid);
-
     int  blocklist_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T ANA_groupid);
     void start_timer (const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T anagrpid, uint8_t value);
     int  get_timer   (const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T anagrpid);
@@ -81,7 +78,6 @@ public:
         encode(epoch, bl);// global map epoch
 
         encode(Created_gws, bl); //Encode created GWs
-        encode(Gmap, bl);
         if (full_encode) {
             encode(Gmetadata, bl);
         }
@@ -98,7 +94,6 @@ public:
 
         decode(Created_gws, bl);
        //dout(0) << "Created_gws: " << Created_gws << dendl;
-        decode(Gmap, bl);
        // dout(0) << "Gmap: " << Gmap << dendl;
         if (full_decode) {
             decode(Gmetadata, bl);

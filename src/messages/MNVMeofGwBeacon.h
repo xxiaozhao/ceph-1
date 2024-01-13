@@ -20,21 +20,19 @@
 #include "messages/PaxosServiceMessage.h"
 #include "mon/MonCommand.h"
 #include "mon/NVMeofGwMap.h"
-
 #include "include/types.h"
+
 class MNVMeofGwBeacon final : public PaxosServiceMessage {
 private:
   static constexpr int HEAD_VERSION = 1;
   static constexpr int COMPAT_VERSION = 1;
 
 protected:
-    std::string              gw_id;
-    std::string              gw_pool;
-    std::string              gw_group;
-    GwSubsystems             subsystems;                           // gateway susbsystem and their state machine states
-    GW_ANA_NONCE_MAP         nonce_map;                            // map of ana-grp-id as keay and value - vector of ceph_entity_addresses
-    GW_AVAILABILITY_E        availability;                         // in absence of  beacon  heartbeat messages it becomes inavailable
-    uint32_t                 version;
+    std::string       gw_id;
+    std::string       gw_pool;
+    std::string       gw_group;
+    BeaconSubsystems  subsystems;                           // gateway susbsystem and their state machine states
+    GW_AVAILABILITY_E availability;                         // in absence of  beacon  heartbeat messages it becomes inavailable
 
 public:
   MNVMeofGwBeacon()
@@ -44,23 +42,31 @@ public:
   MNVMeofGwBeacon(const std::string &gw_id_,
         const std::string& gw_pool_,
         const std::string& gw_group_,
-        const GwSubsystems& subsystems_,
-        const GW_ANA_NONCE_MAP& nonce_map,
-        const GW_AVAILABILITY_E& availability_,
-        const uint32_t& version_
+        const BeaconSubsystems& subsystems_,
+        const GW_AVAILABILITY_E& availability_
   )
     : PaxosServiceMessage{MSG_MNVMEOF_GW_BEACON, 0, HEAD_VERSION, COMPAT_VERSION},
-      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_), nonce_map(nonce_map),
-      availability(availability_), version(version_)
+      gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_),
+      availability(availability_)
   {}
 
   const std::string& get_gw_id() const { return gw_id; }
   const std::string& get_gw_pool() const { return gw_pool; }
   const std::string& get_gw_group() const { return gw_group; }
-  const GW_ANA_NONCE_MAP & get_nonce_map()const {return nonce_map;}
+  GW_ANA_NONCE_MAP get_nonce_map() const {
+    GW_ANA_NONCE_MAP nonce_map;
+    for (const auto& sub: subsystems) {
+      for (const auto& ns: sub.namespaces) {
+        auto& nonce_vec = nonce_map[ns.anagrpid];
+        if (std::find(nonce_vec.begin(), nonce_vec.end(), ns.nonce) == nonce_vec.end())
+          nonce_vec.push_back(ns.nonce);
+      }
+    }
+    return nonce_map;
+  }
+
   const GW_AVAILABILITY_E& get_availability() const { return availability; }
-  const uint32_t& get_version() const { return version; }
-  const GwSubsystems& get_subsystems() const { return subsystems; };
+  const BeaconSubsystems& get_subsystems() const { return subsystems; };
 
 private:
   ~MNVMeofGwBeacon() final {}
@@ -77,13 +83,10 @@ public:
     encode(gw_id, payload);
     encode(gw_pool, payload);
     encode(gw_group, payload);
-    encode((int)subsystems.size(), payload);
-    for (const NqnState& st: subsystems) {
-      encode(st.nqn, payload);
-      for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-        encode((int)st.sm_state[i], payload);
+    encode(subsystems.size(), payload);
+    for (const auto& st: subsystems) {
+      encode(st, payload);
     }
-    encode(nonce_map, payload);
     encode((int)availability, payload);
     encode(version, payload); 
   }
@@ -96,23 +99,16 @@ public:
     decode(gw_id, p);
     decode(gw_pool, p);
     decode(gw_group, p);
-    int n;
-    int tmp;
+    size_t n;
     decode(n, p);
     // Reserve memory for the vector to avoid reallocations
     subsystems.clear();
-    subsystems.reserve(n);
-    for (int i = 0; i < n; i++) {
-      std::string nqn;
-      decode(nqn, p);
-      NqnState st(nqn);
-      for (int j = 0; j < MAX_SUPPORTED_ANA_GROUPS; j++) {
-        decode(tmp, p);
-        st.sm_state[j] = static_cast<GW_EXPORTED_STATES_PER_AGROUP_E>(tmp);
-      }
-      subsystems.push_back(st);
+    for (size_t i = 0; i < n; i++) {
+      BeaconSubsystem sub;
+      decode(sub, p);
+      subsystems.push_back(sub);
     }
-    decode(nonce_map, p);
+    int tmp;
     decode(tmp, p);
     availability = static_cast<GW_AVAILABILITY_E>(tmp);
     decode(version, p);  

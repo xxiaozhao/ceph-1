@@ -1,9 +1,9 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-// vim: ts=8 sw=2 smarttab
+// vim: ts=8 sw=2
 /*
  * Ceph - scalable distributed file system
  *
- * Copyright (C) 2016 John Spray <john.spray@redhat.com>
+ * Copyright (C) 2023,2024
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -182,28 +182,32 @@ void NVMeofGw::send_beacon()
   ceph_assert(ceph_mutex_is_locked_by_me(lock));
   //dout(0) << "sending beacon as gid " << monc.get_global_id() << dendl;
   GW_AVAILABILITY_E gw_availability = GW_AVAILABILITY_E::GW_CREATED;
-  GwSubsystems subs;
-  if (map.epoch > 0) { // handled map already
-    NVMeofGwClient gw_client(
-       grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
-    subsystems_info gw_subsystems;
-    bool ok = gw_client.get_subsystems(gw_subsystems);
-    if (ok) {
-      for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
-        const subsystem& sub = gw_subsystems.subsystems(i);
-        if (sub.listen_addresses_size() == 0) continue; // don't publish subsytems without listeners
-        struct NqnState nqn_state(sub.nqn());
-        auto group_key = std::make_pair(pool, group);
-        GW_STATE_T& gw_state = map.Gmap[group_key][name];
-        //nqn_state. = gw_state.optimized_ana_group_id;
-        if(!gw_state.subsystems.empty())
-            for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-               nqn_state.sm_state[i] = gw_state.subsystems[0].sm_state[i];
-        subs.push_back(nqn_state);
+  BeaconSubsystems subs;
+  NVMeofGwClient gw_client(
+     grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
+  subsystems_info gw_subsystems;
+  bool ok = gw_client.get_subsystems(gw_subsystems);
+  if (ok) {
+    for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
+      const subsystem& sub = gw_subsystems.subsystems(i);
+      BeaconSubsystem bsub;
+      bsub.nqn = sub.nqn();
+      for (int j = 0; j < sub.namespaces_size(); j++) {
+        const auto& ns = sub.namespaces(j);
+        BeaconNamespace bns = {ns.anagrpid(), ns.nonce()};
+        bsub.namespaces.push_back(bns);
       }
+      for (int k = 0; k < sub.listen_addresses_size(); k++) {
+        const auto& ls = sub.listen_addresses(k);
+        // FIXME addr family
+        BeaconListener bls = { "fake", ls.traddr(), ls.trsvcid() };
+        bsub.listeners.push_back(bls);
+      }
+      auto group_key = std::make_pair(pool, group);
+      subs.push_back(bsub);
     }
-    gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
   }
+  gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
 
   dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
@@ -211,9 +215,7 @@ void NVMeofGw::send_beacon()
       pool,
       group,
       subs,
-      GW_ANA_NONCE_MAP(),
-      gw_availability,
-      map.epoch);
+      gw_availability);
   monc.send_mon_message(std::move(m));
 }
 
@@ -261,37 +263,44 @@ void NVMeofGw::shutdown()
   finisher.stop();
 }
 
-void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
+static bool get_gw_state(const char* desc, const std::map<GROUP_KEY, GWMAP>& m, const GROUP_KEY& group_key, const GW_ID_T& gw_id, GW_STATE_T& out)
 {
-  dout(0) << "handle nvmeof gw map" << dendl;
-  auto &mp = mmap->get_map();
-
-  if(mp.epoch == 0xffffffff){
-      dout(0) << "received Beacon Ack " << mp.epoch << dendl;
-      return;  //TODO make proper handling of mon keepalive
+  auto gw_group = m.find(group_key);
+  if (gw_group == m.end()) {
+    dout(0) << "can not find group (" << group_key.first << "," << group_key.second << ") "  << desc << " map: " << m << dendl;
+    return false;
   }
-  dout(0) << "received map epoch " << mp.epoch << dendl;
-  dout(0) << "mp " << mp <<  dendl;
-  ana_info ai;
+  auto gw_state = gw_group->second.find(gw_id);
+  if (gw_state == gw_group->second.end()) {
+    dout(0) << "can not find gw id: " << gw_id << " in " << desc << "group: " << gw_group->second  << dendl;
+    return false;
+  }
+  out = gw_state->second;
+  return true;
+}
+
+void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
+{
+  auto &new_map = nmap->get_map();
   auto group_key = std::make_pair(pool, group);
-  if (map.epoch == 0){ // initial map
-    auto group_gws = mp.Created_gws.find(group_key);
-    if (group_gws == mp.Created_gws.end()) {
-      dout(0) << "Failed to find group key " << group_key << "created gw for " << name << dendl;
-      return;
-    }
-    auto gw = group_gws->second.find(name);
-    if(gw == group_gws->second.end())
-    {
-      dout(0) << "Failed to find created gw for " << name << dendl;
+  dout(0) << "handle nvmeof gw map: " << new_map << dendl;
+
+  GW_STATE_T old_gw_state;
+  auto got_old_gw_state = get_gw_state("old map", map, group_key, name, old_gw_state); 
+  GW_STATE_T new_gw_state;
+  auto got_new_gw_state = get_gw_state("new map", new_map, group_key, name, new_gw_state); 
+
+  if (!got_old_gw_state) {
+    if (!got_new_gw_state) {
+      dout(0) << "Can not find new gw state" << dendl;
       return;
     }
     bool set_group_id = false;
     while (!set_group_id) {
       NVMeofGwMonitorGroupClient monitor_group_client(
           grpc::CreateChannel(monitor_address, grpc::InsecureChannelCredentials()));
-      dout(0) << "GRPC set_group_id: " <<  gw->second.ana_grp_id << dendl;
-      set_group_id = monitor_group_client.set_group_id( gw->second.ana_grp_id);
+      dout(0) << "GRPC set_group_id: " <<  new_gw_state.group_id << dendl;
+      set_group_id = monitor_group_client.set_group_id( new_gw_state.group_id);
       if (!set_group_id) {
 	      dout(0) << "GRPC set_group_id failed" << dendl;
 	      usleep(1000); // TODO: conf options
@@ -299,38 +308,33 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
     }
   }
 
-  // Previously monitor distributed state
-  SM_EXPORTED_STATE& old_gw_state = map.Gmap[group_key][name];
-  const auto& idStateMap = mp.Gmap.find(group_key);
-  if (idStateMap == mp.Gmap.end()) {
-      dout(0) << "Failed to find new state map for " << group_key << dendl;
-      return;
+  // Gather all state changes
+  ana_info ai;
+  for (const auto& nqn_state_pair: new_gw_state.subsystems) {
+    auto& sub = nqn_state_pair.second;
+    const auto& nqn = nqn_state_pair.first;
+    nqn_ana_states nas;
+    nas.set_nqn(nqn);
+    for (ANA_GRP_ID_T  ana_grp_index = 0; ana_grp_index < sub.ana_state.size(); ana_grp_index++) {
+      const auto& old_nqn_state_pair = old_gw_state.subsystems.find(nqn);
+      auto found_old_nqn_state = (old_nqn_state_pair != old_gw_state.subsystems.end());
+      auto new_group_state = sub.ana_state[ana_grp_index];
+
+      // if no state change detected for this nqn, group id
+      if (got_old_gw_state && found_old_nqn_state &&
+           new_group_state == old_nqn_state_pair->second.ana_state[ana_grp_index]) {
+        continue;
+      }
+      ana_group_state gs;
+      gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
+      gs.set_state(new_group_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
+      nas.mutable_states()->Add(std::move(gs));
+      dout(0) << " grpid " << (ana_grp_index + 1) << " state: " << new_gw_state << dendl;
+    }
+    if (nas.states_size()) ai.mutable_states()->Add(std::move(nas));
   }
-  const auto& new_gateway_state = idStateMap->second.find(name);
 
-  // Iterate over possible ANA Groups
-  for (ANA_GRP_ID_T  ana_grp_index = 0; ana_grp_index < MAX_SUPPORTED_ANA_GROUPS; ana_grp_index++) {
-    ana_group_state gs;
-    gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
-
-    // There is no state change for this ANA Group
-    auto old_state = old_gw_state.sm_state[ana_grp_index];
-    if (old_state == new_gateway_state->second.sm_state[ana_grp_index]) continue;
-
-    // detect was active, but not any more transition
-    if ((old_state == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE || old_state == GW_STATES_PER_AGROUP_E::GW_IDLE_STATE ) &&
-        new_gateway_state->second.sm_state[ana_grp_index] != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
-      gs.set_state(INACCESSIBLE); // Set the ANA state
-      ai.mutable_states()->Add(std::move(gs));
-      dout(0) << " grpid " << (ana_grp_index + 1) << " INACCESSIBLE" <<dendl;
-    // detect was not active, but becaome one transition
-    } else if (old_state != GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE &&
-        new_gateway_state->second.sm_state[ana_grp_index] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE) {
-      gs.set_state(OPTIMIZED); // Set the ANA state
-      ai.mutable_states()->Add(std::move(gs));
-      dout(0) << " grpid " << (ana_grp_index + 1) << " OPTIMIZED" <<dendl;
-    } else continue; // Avoid dealing with intermediate states.
-  }
+  // if there is state change, notify the gateway
   if (ai.states_size()) {
     bool set_ana_state = false;
     while (!set_ana_state) {
@@ -343,7 +347,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> mmap)
       }
     }
   }
-  map = mp;
+  map = new_map;
 }
 
 bool NVMeofGw::ms_dispatch2(const ref_t<Message>& m)

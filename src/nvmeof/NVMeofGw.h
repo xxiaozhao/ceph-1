@@ -44,7 +44,7 @@ protected:
   std::unique_ptr<Messenger> client_messenger;
   Objecter objecter;
   Client client;
-  NVMeofGwMap map;
+  std::map<GROUP_KEY, GWMAP> map;
   ceph::mutex lock = ceph::make_mutex("NVMeofGw::lock");
   Finisher finisher;
   SafeTimer timer;

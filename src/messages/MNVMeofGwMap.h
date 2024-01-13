@@ -20,36 +20,34 @@
 
 class MNVMeofGwMap final : public Message {
 protected:
-  NVMeofGwMap map;
+  std::map<GROUP_KEY, GWMAP> map;
 
 public:
-  const NVMeofGwMap& get_map() {return map;}
+  const std::map<GROUP_KEY, GWMAP>& get_map() {return map;}
 
 private:
   MNVMeofGwMap() :
     Message{MSG_MNVMEOF_GW_MAP} {}
   MNVMeofGwMap(const NVMeofGwMap &map_) :
-    Message{MSG_MNVMEOF_GW_MAP}, map(map_)
-  {}
+    Message{MSG_MNVMEOF_GW_MAP}
+  {
+    map_.to_gmap(map);
+  }
   ~MNVMeofGwMap() final {}
 
 public:
   std::string_view get_type_name() const override { return "nvmeofgwmap"; }
   void print(std::ostream& out) const override {
-    // ../src/messages/MNVMeofGwMap.h:40:39: error: no match for ‘operator<<’ (operand types are ‘std::basic_ostream<char>’ and ‘const NVMeofGwMap’)
-    out << get_type_name() << "(map " << "should be map instance here" << ")";
+    out << get_type_name() << "(map " << map << ")";
   }
 
   void decode_payload() override {
-    // ../src/messages/MNVMeofGwMap.h:46:11: error: no matching function for call to ‘decode(NVMeofGwMap&, ceph::buffer::v15_2_0::list::iterator_impl<true>&)’
     auto p = payload.cbegin();
-    map.decode( p, false);
+    decode(map, p);
   }
   void encode_payload(uint64_t features) override {
-    //../src/messages/MNVMeofGwMap.h:51:11: error: no matching function for call to ‘encode(NVMeofGwMap&, ceph::buffer::v15_2_0::list&, uint64_t&)’
-    //using ceph::encode;
-    //encode(map, payload, features);
-    map.encode(payload, false);
+    using ceph::encode;
+    encode(map, payload);
   }
 private:
   using RefCountedObject::put;

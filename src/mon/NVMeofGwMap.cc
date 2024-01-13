@@ -14,6 +14,24 @@ using std::string;
 #undef dout_prefix
 #define dout_prefix *_dout << "nvmeofgw " << __PRETTY_FUNCTION__ << " "
 
+void NVMeofGwMap::to_gmap(std::map<GROUP_KEY, GWMAP>& Gmap) const {
+    Gmap.clear();
+    for (const auto& created_map_pair: Created_gws) {
+        const auto& group_key = created_map_pair.first;
+        const GW_CREATED_MAP& gw_created_map = created_map_pair.second;
+        for (const auto& gw_created_pair: gw_created_map) {
+            const auto& gw_id = gw_created_pair.first;
+            const auto& gw_created  = gw_created_pair.second;
+
+            auto gw_state = GW_STATE_T(gw_created.ana_grp_id);
+            for (const auto& sub: gw_created.subsystems) {
+                gw_state.subsystems.insert({sub.nqn, NqnState(sub.nqn, gw_created.sm_state)});
+            }
+            Gmap[group_key][gw_id] = gw_state;
+        }
+    }
+}
+
 int  NVMeofGwMap::cfg_add_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key) {
     // Calculate allocated group bitmask
     bool allocated[MAX_SUPPORTED_ANA_GROUPS] = {false};
@@ -51,7 +69,6 @@ int NVMeofGwMap::cfg_delete_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key)
                 fsm_handle_gw_delete (gw_id, group_key, state.sm_state[i], i, modified);
             }
             dout(4) << " Delete GW :"<< gw_id  << " ANA grpid: " << state.ana_grp_id  << dendl;
-            Gmap[group_key].erase(gw_id);
             Gmetadata[group_key].erase(gw_id);
         } else {
             rc = -EINVAL;
@@ -99,7 +116,6 @@ int NVMeofGwMap::process_gw_map_gw_down(const GW_ID_T &gw_id, const GROUP_KEY& g
         for (ANA_GRP_ID_T i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i ++) {
             fsm_handle_gw_down (gw_id, group_key, st.sm_state[i], i, propose_pending);
             st.standby_state(i);
-            copy_sm_change_to_gmap(gw_id, group_key, i);
         }
     }
     else {
@@ -126,7 +142,6 @@ void NVMeofGwMap::process_gw_map_ka(const GW_ID_T &gw_id, const GROUP_KEY& group
         for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) st.sm_state[i] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
         if (st.ana_grp_id != REDUNDANT_GW_ANA_GROUP_ID) { // not a redundand GW
             st.sm_state[st.ana_grp_id] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE;
-            copy_sm_change_to_gmap(gw_state->first, group_key, st.ana_grp_id);
         }
         propose_pending = true;
     }
@@ -201,7 +216,6 @@ void NVMeofGwMap::handle_abandoned_ana_groups(bool& propose)
                     if (!found) {
                         dout(4) << __func__ << " GW " << gw_id   << " turns to be Active for ANA group " << state.ana_grp_id << dendl;
                         state.sm_state[state.ana_grp_id] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE;
-                        copy_sm_change_to_gmap(gw_id, group_key, state.ana_grp_id);
                         propose = true;
                     }
                 }
@@ -258,7 +272,6 @@ void  NVMeofGwMap::set_failover_gw_for_ANA_group(const GW_ID_T &failed_gw_id, co
         start_timer(gw_id, group_key, ANA_groupid, 6); //start Failover preparation timer
         //TODO  no need to send map to clients.
     }
-    copy_sm_change_to_gmap(gw_id, group_key, ANA_groupid);
 }
 
 void  NVMeofGwMap::find_failback_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key,   bool &some_found)
@@ -349,7 +362,6 @@ void  NVMeofGwMap::find_failover_candidate(const GW_ID_T &gw_id, const GROUP_KEY
                 }
             }
             gw_state->second.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
-            copy_sm_change_to_gmap(gw_id, group_key, grpid);
         }
 }
 
@@ -368,7 +380,6 @@ void NVMeofGwMap::fsm_handle_gw_alive (const GW_ID_T &gw_id, const GROUP_KEY& gr
                                << " Ana grp: " << grpid  << " timer:" << timer_val << dendl;
             gw_state.sm_state[grpid] =  GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE; // Failover Gw still alive and guaranteed that
             cancel_timer(gw_id, group_key, grpid);                          // ana group wouldnt be taken back  during blocklist wait period
-            copy_sm_change_to_gmap(gw_id, group_key, grpid);
             map_modified = true;
         }
     }
@@ -400,7 +411,6 @@ void NVMeofGwMap::fsm_handle_gw_alive (const GW_ID_T &gw_id, const GROUP_KEY& gr
                 if (st.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_BLOCKED_AGROUP_OWNER) { // found GW   that was intended for  Failback for this ana grp
                     dout(4) << "Warning: Outgoing Failback when GW is down back - to rollback it"  <<" GW "  <<gw_id << "for ANA Group " << grpid << dendl;
                     st.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
-                    copy_sm_change_to_gmap(gw_st.first, group_key, grpid);
                     map_modified = true;
                     break;
                 }
@@ -441,7 +451,6 @@ void NVMeofGwMap::fsm_handle_gw_delete (const GW_ID_T &gw_id, const GROUP_KEY& g
                     if (gs.second.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE  || gs.second.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED){
                         gs.second.standby_state(grpid);
                         map_modified = true;
-                        copy_sm_change_to_gmap(gs.first, group_key, grpid);
                         if (gs.second.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED)
                             cancel_timer(gs.first, group_key, grpid);
                         break;
@@ -467,7 +476,6 @@ void NVMeofGwMap::fsm_handle_gw_delete (const GW_ID_T &gw_id, const GROUP_KEY& g
                     dout(4) << "Warning: Outgoing Failback when GW is deleted - to rollback it" << " GW " << gw_id << "for ANA Group " << grpid << dendl;
                     st.standby_state(grpid);
                     map_modified = true;
-                    copy_sm_change_to_gmap(nqn_gws_state.first, group_key, grpid);
                     break;
                 }
             }
@@ -479,7 +487,6 @@ void NVMeofGwMap::fsm_handle_gw_delete (const GW_ID_T &gw_id, const GROUP_KEY& g
             GW_CREATED_T& gw_state = Created_gws[group_key][gw_id];
             map_modified = true;
             gw_state.standby_state(grpid);
-            copy_sm_change_to_gmap(gw_id, group_key, grpid);
         }
         break;
 
@@ -508,18 +515,17 @@ void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& g
                 st.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE;
                 dout(4) << "Failback from GW " << gw_id << " to " << gw_state.first << dendl;
                 map_modified = true;
-                copy_sm_change_to_gmap(gw_state.first, group_key, grpid);
                 break;
             }
             else if (st.ana_grp_id == grpid){
                 if(st.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE  &&  st.availability == GW_AVAILABILITY_E::GW_AVAILABLE) {
                     st.sm_state[grpid] = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE; // GW failed and started during the persistency interval
                     dout(4)  << "Failback unsuccessfull. GW: " << gw_state.first << "becomes Active for the ana group " << grpid  << dendl;
+
                 }
                 fbp_gw_state.standby_state(grpid);
                 dout(4) << "Failback unsuccessfull GW: " << gw_id << "becomes standby for the ana group " << grpid  << dendl;
                 map_modified = true;
-                copy_sm_change_to_gmap(gw_id, group_key, grpid);
                 break;
             }
         }
@@ -534,7 +540,6 @@ void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& g
         dout(4) << " Expired GW_WAIT_FAILOVER_PREPARED timer from GW " << gw_id << " ANA groupId: "<< grpid <<
                                                                       " epoch changed: " << changed <<  dendl;
         fbp_gw_state.sm_state[grpid] =  GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
-        copy_sm_change_to_gmap(gw_id, group_key, grpid);
         map_modified = true;
         //ceph_assert(false);
     }
@@ -580,11 +585,6 @@ int NVMeofGwMap::blocklist_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key, 
     }
     return 0;
 }
-
-void NVMeofGwMap::copy_sm_change_to_gmap(const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T grpid) {
-
-}
-
 
 void NVMeofGwMap::start_timer(const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T anagrpid, uint8_t value) {
     Gmetadata[group_key][gw_id].data[anagrpid].anagrp_sm_tstamps = 0;

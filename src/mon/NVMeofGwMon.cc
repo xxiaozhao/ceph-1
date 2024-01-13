@@ -369,13 +369,11 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     dout(4)  << dendl;
     auto m = op->get_req<MNVMeofGwBeacon>();
 
-    dout(4) << "availability " <<  m->get_availability() << " GW : " <<m->get_gw_id() << " subsystems " << m->get_subsystems() <<  " epoch " << m->get_version() << dendl;
+    dout(4) << "availability " <<  m->get_availability() << " GW : " <<m->get_gw_id() << " subsystems " << m->get_subsystems() << dendl;
 
     GW_ID_T gw_id = m->get_gw_id();
     GROUP_KEY group_key = std::make_pair(m->get_gw_pool(),  m->get_gw_group());
     GW_AVAILABILITY_E  avail = m->get_availability();
-    const GwSubsystems& subsystems =  m->get_subsystems();
-    bool first_pass = true;
     bool propose = false;
     auto& group_gws = pending_map.Created_gws[group_key];
     auto gw = group_gws.find(gw_id);
@@ -386,7 +384,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
            pending_map.cfg_add_gw(gw_id, group_key);
            dout(4) << "GW " << gw_id << " group_key " << group_key << " added to the pending Created_gws "<< pending_map.Created_gws <<dendl;
         }
-	    propose = true;
+        propose = true;
         goto set_propose;
     }
 
@@ -394,27 +392,9 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     ceph_assert (gw != group_gws.end());
 
     // deep copy the whole nonce map of this GW
-    if(m->get_nonce_map().size()){
-       pending_map.Created_gws[group_key][gw_id].nonce_map = m->get_nonce_map();
-       dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key][gw_id].nonce_map  << dendl;
-    }
-    // Validation gw is in the database , rebuild of external map GMAP
-    for (const NqnState &st : subsystems)
-    {
-        auto& nqn_gws_states = pending_map.Gmap[group_key];
-        auto  gw_state = nqn_gws_states.find(gw_id);
-        if (gw_state == nqn_gws_states.end())
-        {
-            dout(4) <<  "GW  is not in the  database: " << gw_id << " " << st.nqn << dendl;
-            pending_map.Gmap[group_key][gw_id] = GW_STATE_T(gw->second.ana_grp_id);
-            //break;
-        }
-        if(first_pass){
-            pending_map.Gmap[group_key][gw_id].subsystems.clear();
-            first_pass = false;
-        }
-        pending_map.Gmap[group_key][gw_id].subsystems.push_back(st);
-    }
+    pending_map.Created_gws[group_key][gw_id].nonce_map = m->get_nonce_map();
+    dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key][gw_id].nonce_map  << dendl;
+
     //pending_map.handle_removed_subsystems(gw_id, group_key, configured_subsystems, propose);
 
     if(avail == GW_AVAILABILITY_E::GW_AVAILABLE)
@@ -422,25 +402,19 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         auto now = ceph::coarse_mono_clock::now();
         // check pending_map.epoch vs m->get_version() - if different - drop the beacon
 
-        for (const NqnState& st: subsystems) {
-            LastBeacon lb = {gw_id, group_key};
-            last_beacon[lb] = now;
-            pending_map.process_gw_map_ka(gw_id, group_key, propose);
-            break;
-        }
+        LastBeacon lb = {gw_id, group_key};
+        last_beacon[lb] = now;
+        pending_map.process_gw_map_ka(gw_id, group_key, propose);
     }
     else if(avail == GW_AVAILABILITY_E::GW_UNAVAILABLE){ // state set by GW client application
         //  TODO: remove from last_beacon if found . if gw was found in last_beacon call process_gw_map_gw_down
 
-        for (const NqnState& st: subsystems) {
-            LastBeacon lb = {gw_id, group_key};
+        LastBeacon lb = {gw_id, group_key};
 
-            auto it = last_beacon.find(lb);
-            if (it != last_beacon.end()){
-                last_beacon.erase(lb);
-                pending_map.process_gw_map_gw_down(gw_id, group_key, propose);
-                break;
-            }
+        auto it = last_beacon.find(lb);
+        if (it != last_beacon.end()){
+            last_beacon.erase(lb);
+            pending_map.process_gw_map_gw_down(gw_id, group_key, propose);
         }
     }
 set_propose:
