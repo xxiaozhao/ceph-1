@@ -177,38 +177,42 @@ int NVMeofGw::init()
   return 0;
 }
 
+static bool first_beacon = true;//TODO make it better - like class parameter
 void NVMeofGw::send_beacon()
 {
   ceph_assert(ceph_mutex_is_locked_by_me(lock));
   //dout(0) << "sending beacon as gid " << monc.get_global_id() << dendl;
   GW_AVAILABILITY_E gw_availability = GW_AVAILABILITY_E::GW_CREATED;
   BeaconSubsystems subs;
-  NVMeofGwClient gw_client(
-     grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
-  subsystems_info gw_subsystems;
-  bool ok = gw_client.get_subsystems(gw_subsystems);
-  if (ok) {
-    for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
-      const subsystem& sub = gw_subsystems.subsystems(i);
-      BeaconSubsystem bsub;
-      bsub.nqn = sub.nqn();
-      for (int j = 0; j < sub.namespaces_size(); j++) {
-        const auto& ns = sub.namespaces(j);
-        BeaconNamespace bns = {ns.anagrpid(), ns.nonce()};
-        bsub.namespaces.push_back(bns);
-      }
-      for (int k = 0; k < sub.listen_addresses_size(); k++) {
-        const auto& ls = sub.listen_addresses(k);
-        // FIXME addr family
-        BeaconListener bls = { "fake", ls.traddr(), ls.trsvcid() };
-        bsub.listeners.push_back(bls);
-      }
-      auto group_key = std::make_pair(pool, group);
-      subs.push_back(bsub);
-    }
-  }
-  gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
 
+  if (!first_beacon) {
+      NVMeofGwClient gw_client(
+              grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
+      subsystems_info gw_subsystems;
+      bool ok = gw_client.get_subsystems(gw_subsystems);
+      if (ok) {
+          for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
+              const subsystem& sub = gw_subsystems.subsystems(i);
+              BeaconSubsystem bsub;
+              bsub.nqn = sub.nqn();
+              for (int j = 0; j < sub.namespaces_size(); j++) {
+                  const auto& ns = sub.namespaces(j);
+                  BeaconNamespace bns = {ns.anagrpid(), ns.nonce()};
+                  bsub.namespaces.push_back(bns);
+              }
+              for (int k = 0; k < sub.listen_addresses_size(); k++) {
+                  const auto& ls = sub.listen_addresses(k);
+                  // FIXME addr family
+                  BeaconListener bls = { "fake", ls.traddr(), ls.trsvcid() };
+                  bsub.listeners.push_back(bls);
+              }
+              auto group_key = std::make_pair(pool, group);
+              subs.push_back(bsub);
+          }
+      }
+      gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
+  }
+  else first_beacon = false;
   dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
       name,

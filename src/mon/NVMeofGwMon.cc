@@ -418,7 +418,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         }
     }
 set_propose:
-    auto msg = make_message<MNVMeofGwMap>( NVMeofGwMap::create_null_map());
+    auto msg = make_message<MNVMeofGwMap>(pending_map);
     mon.send_reply(op, msg.detach());
     if (propose){
       dout(4) << "decision to delayed_map in prepare_beacon" <<dendl;
