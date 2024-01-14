@@ -177,42 +177,57 @@ int NVMeofGw::init()
   return 0;
 }
 
-static bool first_beacon = true;//TODO make it better - like class parameter
+static bool get_gw_state(const char* desc, const std::map<GROUP_KEY, GWMAP>& m, const GROUP_KEY& group_key, const GW_ID_T& gw_id, GW_STATE_T& out)
+{
+  auto gw_group = m.find(group_key);
+  if (gw_group == m.end()) {
+    dout(0) << "can not find group (" << group_key.first << "," << group_key.second << ") "  << desc << " map: " << m << dendl;
+    return false;
+  }
+  auto gw_state = gw_group->second.find(gw_id);
+  if (gw_state == gw_group->second.end()) {
+    dout(0) << "can not find gw id: " << gw_id << " in " << desc << "group: " << gw_group->second  << dendl;
+    return false;
+  }
+  out = gw_state->second;
+  return true;
+}
+
 void NVMeofGw::send_beacon()
 {
   ceph_assert(ceph_mutex_is_locked_by_me(lock));
   //dout(0) << "sending beacon as gid " << monc.get_global_id() << dendl;
   GW_AVAILABILITY_E gw_availability = GW_AVAILABILITY_E::GW_CREATED;
   BeaconSubsystems subs;
-
-  if (!first_beacon) {
-      NVMeofGwClient gw_client(
-              grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
-      subsystems_info gw_subsystems;
-      bool ok = gw_client.get_subsystems(gw_subsystems);
-      if (ok) {
-          for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
-              const subsystem& sub = gw_subsystems.subsystems(i);
-              BeaconSubsystem bsub;
-              bsub.nqn = sub.nqn();
-              for (int j = 0; j < sub.namespaces_size(); j++) {
-                  const auto& ns = sub.namespaces(j);
-                  BeaconNamespace bns = {ns.anagrpid(), ns.nonce()};
-                  bsub.namespaces.push_back(bns);
-              }
-              for (int k = 0; k < sub.listen_addresses_size(); k++) {
-                  const auto& ls = sub.listen_addresses(k);
-                  // FIXME addr family
-                  BeaconListener bls = { "fake", ls.traddr(), ls.trsvcid() };
-                  bsub.listeners.push_back(bls);
-              }
-              auto group_key = std::make_pair(pool, group);
-              subs.push_back(bsub);
-          }
+  NVMeofGwClient gw_client(
+     grpc::CreateChannel(gateway_address, grpc::InsecureChannelCredentials()));
+  subsystems_info gw_subsystems;
+  bool ok = gw_client.get_subsystems(gw_subsystems);
+  if (ok) {
+    for (int i = 0; i < gw_subsystems.subsystems_size(); i++) {
+      const subsystem& sub = gw_subsystems.subsystems(i);
+      BeaconSubsystem bsub;
+      bsub.nqn = sub.nqn();
+      for (int j = 0; j < sub.namespaces_size(); j++) {
+        const auto& ns = sub.namespaces(j);
+        BeaconNamespace bns = {ns.anagrpid(), ns.nonce()};
+        bsub.namespaces.push_back(bns);
       }
-      gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
+      for (int k = 0; k < sub.listen_addresses_size(); k++) {
+        const auto& ls = sub.listen_addresses(k);
+        // FIXME addr family
+        BeaconListener bls = { "fake", ls.traddr(), ls.trsvcid() };
+        bsub.listeners.push_back(bls);
+      }
+      subs.push_back(bsub);
+    }
   }
-  else first_beacon = false;
+
+  auto group_key = std::make_pair(pool, group);
+  GW_STATE_T old_gw_state;
+  // if already got gateway state in the map
+  if (get_gw_state("old map", map, group_key, name, old_gw_state))
+    gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
   dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
       name,
@@ -265,22 +280,6 @@ void NVMeofGw::shutdown()
   // to touch references to the things we're about to tear down
   finisher.wait_for_empty();
   finisher.stop();
-}
-
-static bool get_gw_state(const char* desc, const std::map<GROUP_KEY, GWMAP>& m, const GROUP_KEY& group_key, const GW_ID_T& gw_id, GW_STATE_T& out)
-{
-  auto gw_group = m.find(group_key);
-  if (gw_group == m.end()) {
-    dout(0) << "can not find group (" << group_key.first << "," << group_key.second << ") "  << desc << " map: " << m << dendl;
-    return false;
-  }
-  auto gw_state = gw_group->second.find(gw_id);
-  if (gw_state == gw_group->second.end()) {
-    dout(0) << "can not find gw id: " << gw_id << " in " << desc << "group: " << gw_group->second  << dendl;
-    return false;
-  }
-  out = gw_state->second;
-  return true;
 }
 
 void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
