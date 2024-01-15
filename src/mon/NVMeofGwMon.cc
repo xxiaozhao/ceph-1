@@ -377,6 +377,7 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     bool propose = false;
     auto& group_gws = pending_map.Created_gws[group_key];
     auto gw = group_gws.find(gw_id);
+    const BeaconSubsystems& sub = m->get_subsystems();
 
     if (avail == GW_AVAILABILITY_E::GW_CREATED){
         // new created gw detected
@@ -396,6 +397,15 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     dout(4) << "nonce map of GW " << gw_id << " "<< pending_map.Created_gws[group_key][gw_id].nonce_map  << dendl;
 
     //pending_map.handle_removed_subsystems(gw_id, group_key, configured_subsystems, propose);
+
+    //if  no subsystem configured set gw as avail = GW_AVAILABILITY_E::GW_UNAVAILABLE
+
+    if(sub.size() == 0) {
+        avail = GW_AVAILABILITY_E::GW_UNAVAILABLE;
+    }
+    else  {
+        pending_map.Created_gws[group_key][gw_id].subsystems = sub;
+    }
 
     if(avail == GW_AVAILABILITY_E::GW_AVAILABLE)
     {
@@ -418,7 +428,9 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
         }
     }
 set_propose:
-    auto msg = make_message<MNVMeofGwMap>(pending_map);
+    NVMeofGwMap ack_map;
+    ack_map.Created_gws[group_key][gw_id] = pending_map.Created_gws[group_key][gw_id];// respond with a map slice correspondent to the sane GW
+    auto msg = make_message<MNVMeofGwMap>(ack_map);
     mon.send_reply(op, msg.detach());
     if (propose){
       dout(4) << "decision to delayed_map in prepare_beacon" <<dendl;
