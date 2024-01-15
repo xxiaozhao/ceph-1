@@ -18,6 +18,7 @@
 #include "include/ceph_assert.h"
 #include "global/global_init.h"
 #include "mon/NVMeofGwMon.h"
+#include "messages/MNVMeofGwMap.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mon
@@ -52,35 +53,49 @@ void test_NVMeofGwMap() {
   dout(0) << pending_map << dendl;
 }
 
-void test_NVMeofGwMap_handle_removed() {
-/* TODO handle_removed not implemented
+void test_MNVMeofGwMap() {
   dout(0) << __func__ << "\n\n" << dendl;
-  auto group_key = std::make_pair("pool", "group");
-  std::string nqn = "nqn2008.node1";
+  std::map<GROUP_KEY, GWMAP> map;
 
+  std::string pool = "pool1";
+  std::string group = "grp1";
+  std::string gw_id = "GW1";
+  GW_STATE_T state(1);
+  std::string nqn = "nqn";
+  ANA_STATE ana_state;
+  NqnState nqn_state(nqn, ana_state);
+  state.subsystems.insert({nqn, nqn_state});
+
+  auto group_key = std::make_pair(pool, group);
+  map[group_key][gw_id] = state;
+
+
+
+  ceph::buffer::list bl;
+  encode(map, bl);
+  dout(0) << "encode: " << map << dendl;
+  decode(map, bl);
+  dout(0) << "decode: " << map << dendl;
+
+  BeaconSubsystem sub = { nqn, {}, {} };
   NVMeofGwMap pending_map;
   pending_map.cfg_add_gw("GW1" ,group_key);
   pending_map.cfg_add_gw("GW2" ,group_key);
   pending_map.cfg_add_gw("GW3" ,group_key);
-  dout(0) << "Initial: " << pending_map << dendl;
+  NONCE_VECTOR_T new_nonces = {"abc", "def","hij"};
+  pending_map.Created_gws[group_key]["GW1"].nonce_map[1] = new_nonces;
+  pending_map.Created_gws[group_key]["GW1"].subsystems.push_back(sub);
+  for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++)
+    pending_map.Created_gws[group_key]["GW1"].blocklist_data[i].osd_epoch = i*2;
 
-  bool proposed;
-  // TODO: not implemented
-  //pending_map.handle_removed_subsystems("GW2", group_key, {}, proposed);
-  dout(0) << "After remove: " << pending_map << dendl;
-  ceph_assert(proposed);
-  auto& gw_group = pending_map.Created_gws[group_key];
-  ceph_assert(gw_group.size() == 2);
-  ceph_assert(gw_group.find("GW2") == gw_group.end());
+  pending_map.Created_gws[group_key]["GW2"].nonce_map[2] = new_nonces;
+  dout(0) << "pending map: " << pending_map << dendl;
 
-  // TODO: not implemented
-  //pending_map.handle_removed_subsystems("GW1", group_key, { nqn }, proposed);
-  dout(0) << "After non proposed remove: " << pending_map << dendl;
-  ceph_assert(!proposed);
-  ceph_assert(gw_group.size() == 2);
-  */
+  auto msg = make_message<MNVMeofGwMap>(pending_map);
+  msg->encode_payload(0);
+  msg->decode_payload();
+  dout(0) << "decode msg: " << *msg << dendl;
 }
-
 
 int main(int argc, const char **argv)
 {
@@ -93,6 +108,6 @@ int main(int argc, const char **argv)
 
   // Run tests
   test_NVMeofGwMap();
-  test_NVMeofGwMap_handle_removed();
+  test_MNVMeofGwMap();
 }
 

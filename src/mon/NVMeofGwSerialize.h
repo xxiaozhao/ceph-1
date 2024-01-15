@@ -162,7 +162,7 @@ inline void encode(const ANA_STATE& st,  ceph::bufferlist &bl) {
 inline void decode(ANA_STATE& st, ceph::buffer::list::const_iterator &bl) {
     size_t n;
     decode(n, bl);
-    st.reserve(n);
+    st.resize(n);
     for (size_t i = 0; i < n; i++) {
         int a;
         decode(a, bl);
