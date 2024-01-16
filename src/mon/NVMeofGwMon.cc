@@ -429,9 +429,11 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     }
 set_propose:
     NVMeofGwMap ack_map;
-    ack_map.Created_gws[group_key][gw_id] = pending_map.Created_gws[group_key][gw_id];// respond with a map slice correspondent to the sane GW
-    auto msg = make_message<MNVMeofGwMap>(ack_map);
-    mon.send_reply(op, msg.detach());
+    if(!propose) {
+      ack_map.Created_gws[group_key][gw_id] = map.Created_gws[group_key][gw_id];// respond with a map slice correspondent to the same GW
+      auto msg = make_message<MNVMeofGwMap>(ack_map);
+      mon.send_reply(op, msg.detach());
+    }
     if (propose){
       dout(4) << "decision to delayed_map in prepare_beacon" <<dendl;
       return true;

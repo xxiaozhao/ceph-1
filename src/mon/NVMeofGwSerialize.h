@@ -117,6 +117,25 @@ inline std::ostream& operator<<(std::ostream& os, const GW_ANA_NONCE_MAP value) 
     return os;
 }
 
+inline std::ostream& print_gw_created_t(std::ostream& os, const GW_CREATED_T value, size_t num_ana_groups) {
+    os << "==Internal map ==GW_CREATED_T { ana_group_id " << value.ana_grp_id << " osd_epochs: ";
+    for(size_t i = 0; i < num_ana_groups; i ++){
+        os << " " << value.blocklist_data[i].osd_epoch;
+    }
+    os << "\n" << MODULE_PREFFIX << "nonces: " << value.nonce_map << " }";
+
+    for (size_t i = 0; i < num_ana_groups; i++) {
+        os << value.sm_state[i] << ",";
+    }
+    os <<  "]\n"<< MODULE_PREFFIX << " failover peers ";
+    for (size_t i = 0; i < num_ana_groups; i++) {
+        os << value.failover_peer[i] << ",";
+    }
+    os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << "]";
+
+    return os;
+}
+
 inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
     os << "==Internal map ==G W_CREATED_T { ana_group_id " << value.ana_grp_id << " osd_epochs: ";
     for(int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i ++){
@@ -139,7 +158,9 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
 inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_MAP value) {
     if(value.size()) os << "\n" << MODULE_PREFFIX;;
     for (auto &gw_created_map : value) {
-        os  <<  "gw_id: " << gw_created_map.first  << " [ " << gw_created_map.second << "] \n"<< MODULE_PREFFIX;
+        os  <<  "gw_id: " << gw_created_map.first  << " [ " ;//<< gw_created_map.second << "] \n"<< MODULE_PREFFIX;
+        print_gw_created_t(os, gw_created_map.second,  value.size());
+        os << "] \n"<< MODULE_PREFFIX;
     }
     return os;
 }
