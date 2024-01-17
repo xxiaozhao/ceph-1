@@ -432,6 +432,7 @@ set_propose:
     NVMeofGwMap ack_map;
     if(!propose) {
       ack_map.Created_gws[group_key][gw_id] = map.Created_gws[group_key][gw_id];// respond with a map slice correspondent to the same GW
+      ack_map.epoch = map.epoch;
       auto msg = make_message<MNVMeofGwMap>(ack_map);
       mon.send_reply(op, msg.detach());
     }

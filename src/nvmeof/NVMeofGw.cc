@@ -314,8 +314,10 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
   }
 
   // Make sure we do not get out of order state changed from the monitor
-  if (got_old_gw_state && got_new_gw_state)
+  if (got_old_gw_state && got_new_gw_state) {
+    dout(0) << "got_old_gw_state: " << old_gw_state << "got_new_gw_state: " << new_gw_state << dendl;
     ceph_assert(new_gw_state.gw_map_epoch >= old_gw_state.gw_map_epoch);
+  }
 
   // Gather all state changes
   ana_info ai;
