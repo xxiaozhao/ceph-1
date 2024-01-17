@@ -291,8 +291,10 @@ inline void encode(const GW_CREATED_MAP& gws,  ceph::bufferlist &bl) {
         }
         encode((int)gw.second.availability, bl);
 
-        for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++)
+        for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++){
             encode(gw.second.blocklist_data[i].osd_epoch, bl);
+            encode(gw.second.blocklist_data[i].epoch_changed, bl);
+        }
         encode(gw.second.nonce_map, bl);
     }
 }
@@ -323,8 +325,10 @@ inline void decode(GW_CREATED_MAP& gws, ceph::buffer::list::const_iterator &bl) 
         decode(avail, bl);
         gw_created.availability = (GW_AVAILABILITY_E)avail;
 
-        for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++)
+        for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++){
             decode(gw_created.blocklist_data[i].osd_epoch, bl);
+            decode(gw_created.blocklist_data[i].epoch_changed, bl);
+        }
         decode(gw_created.nonce_map, bl);
 
         gws[gw_name] = gw_created;

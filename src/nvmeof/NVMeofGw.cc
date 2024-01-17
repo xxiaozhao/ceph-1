@@ -229,7 +229,8 @@ void NVMeofGw::send_beacon()
   // if already got gateway state in the map
   if (get_gw_state("old map", map, group_key, name, old_gw_state))
     gw_availability = ok ? GW_AVAILABILITY_E::GW_AVAILABLE : GW_AVAILABILITY_E::GW_UNAVAILABLE;
-  dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability << dendl;
+  dout(0) << "sending beacon as gid " << monc.get_global_id() << " availability " << (int)gw_availability <<
+    " osdmap_epoch " << osdmap_epoch << dendl;
   auto m = ceph::make_message<MNVMeofGwBeacon>(
       name,
       pool,
@@ -313,7 +314,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
     }
   }
 
-  // Make sure we do not get out of order state changed from the monitor
+  // Make sure we do not get out of order state changes from the monitor
   if (got_old_gw_state && got_new_gw_state) {
     dout(0) << "got_old_gw_state: " << old_gw_state << "got_new_gw_state: " << new_gw_state << dendl;
     ceph_assert(new_gw_state.gw_map_epoch >= old_gw_state.gw_map_epoch);

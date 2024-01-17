@@ -369,7 +369,8 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     dout(4)  << dendl;
     auto m = op->get_req<MNVMeofGwBeacon>();
 
-    dout(4) << "availability " <<  m->get_availability() << " GW : " <<m->get_gw_id() << " subsystems " << m->get_subsystems() << dendl;
+    dout(4) << "availability " <<  m->get_availability() << " GW : " << m->get_gw_id() <<
+        " osdmap_epoch " << m->get_last_osd_epoch() << " subsystems " << m->get_subsystems() << dendl;
 
     GW_ID_T gw_id = m->get_gw_id();
     GROUP_KEY group_key = std::make_pair(m->get_gw_pool(),  m->get_gw_group());

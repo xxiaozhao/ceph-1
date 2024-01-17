@@ -59,7 +59,7 @@ public:
     GW_ANA_NONCE_MAP nonce_map;
     for (const auto& sub: subsystems) {
       for (const auto& ns: sub.namespaces) {
-        auto& nonce_vec = nonce_map[ns.anagrpid];
+        auto& nonce_vec = nonce_map[ns.anagrpid-1];//Converting   ana groups to offsets
         if (std::find(nonce_vec.begin(), nonce_vec.end(), ns.nonce) == nonce_vec.end())
           nonce_vec.push_back(ns.nonce);
       }
