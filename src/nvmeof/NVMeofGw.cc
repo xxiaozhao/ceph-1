@@ -36,6 +36,7 @@
 
 NVMeofGw::NVMeofGw(int argc, const char **argv) :
   Dispatcher(g_ceph_context),
+  osdmap_epoch(0),
   monc{g_ceph_context, poolctx},
   client_messenger(Messenger::create(g_ceph_context, "async", entity_name_t::CLIENT(-1), "client", getpid())),
   objecter{g_ceph_context, client_messenger.get(), &monc, poolctx},
@@ -234,7 +235,8 @@ void NVMeofGw::send_beacon()
       pool,
       group,
       subs,
-      gw_availability, 0);
+      gw_availability,
+      osdmap_epoch);
   monc.send_mon_message(std::move(m));
 }
 
@@ -311,6 +313,10 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
     }
   }
 
+  // Make sure we do not get out of order state changed from the monitor
+  if (got_old_gw_state && got_new_gw_state)
+    ceph_assert(new_gw_state.gw_map_epoch >= old_gw_state.gw_map_epoch);
+
   // Gather all state changes
   ana_info ai;
   for (const auto& nqn_state_pair: new_gw_state.subsystems) {
@@ -330,7 +336,23 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
       }
       ana_group_state gs;
       gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
-      gs.set_state(new_group_state.first == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
+      const auto& new_agroup_state = new_group_state.first;
+      const epoch_t& blocklist_epoch = new_group_state.second;
+
+      if (new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE &&
+          blocklist_epoch != 0) {
+        // Check if we need to wait for a newer OSD map before starting
+        bool const ready = objecter.with_osdmap(
+          [blocklist_epoch](const OSDMap& o) {
+            return o.get_epoch() >= blocklist_epoch;
+          });
+	if (!ready) {
+           dout(0) << "Not ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
+           return;
+	}
+	osdmap_epoch = blocklist_epoch;
+      }
+      gs.set_state(new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
       nas.mutable_states()->Add(std::move(gs));
       dout(0) << " grpid " << (ana_grp_index + 1) << " state: " << new_gw_state << dendl;
     }
