@@ -41,7 +41,7 @@ public:
 
     int   cfg_add_gw                    (const GW_ID_T &gw_id, const GROUP_KEY& group_key);
     int   cfg_delete_gw                 (const GW_ID_T &gw_id, const GROUP_KEY& group_key);
-    void  process_gw_map_ka             (const GW_ID_T &gw_id, const GROUP_KEY& group_key, bool &propose_pending);
+    void  process_gw_map_ka             (const GW_ID_T &gw_id, const GROUP_KEY& group_key, epoch_t& last_osd_epoch,  bool &propose_pending);
     int   process_gw_map_gw_down        (const GW_ID_T &gw_id, const GROUP_KEY& group_key, bool &propose_pending);
     void  update_active_timers          (bool &propose_pending);
     void  handle_abandoned_ana_groups   (bool &propose_pending);
@@ -51,7 +51,8 @@ private:
     GW_CREATED_T&   find_already_created_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key);
     void fsm_handle_gw_down    (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
     void fsm_handle_gw_delete  (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
-    void fsm_handle_gw_alive   (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  GW_CREATED_T & gw_state, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified);
+    void fsm_handle_gw_alive   (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  GW_CREATED_T & gw_state, GW_STATES_PER_AGROUP_E state,
+                                                                                   ANA_GRP_ID_T grpid, epoch_t& last_osd_epoch, bool &map_modified);
     void fsm_handle_to_expired (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  ANA_GRP_ID_T grpid,  bool &map_modified);
 
     void find_failover_candidate(const GW_ID_T &gw_id, const GROUP_KEY& group_key,  ANA_GRP_ID_T grpid, bool &propose_pending);

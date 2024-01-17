@@ -414,7 +414,8 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
 
         LastBeacon lb = {gw_id, group_key};
         last_beacon[lb] = now;
-        pending_map.process_gw_map_ka(gw_id, group_key, propose);
+        epoch_t last_osd_epoch = m->get_last_osd_epoch();
+        pending_map.process_gw_map_ka(gw_id, group_key, last_osd_epoch, propose);
     }
     else if(avail == GW_AVAILABILITY_E::GW_UNAVAILABLE){ // state set by GW client application
         //  TODO: remove from last_beacon if found . if gw was found in last_beacon call process_gw_map_gw_down

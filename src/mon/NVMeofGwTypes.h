@@ -87,7 +87,7 @@ struct GW_CREATED_T {
         for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++){
             sm_state[i] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
             failover_peer[i]  = "";
-            blocklist_data[i].osd_epoch = 0xffffffff;
+            blocklist_data[i].osd_epoch = 0;
             blocklist_data[i].epoch_changed = true;
         }
     };
@@ -96,8 +96,11 @@ struct GW_CREATED_T {
            sm_state[grpid]       = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
            failover_peer[grpid]  = "";
     };
+    void active_state(ANA_GRP_ID_T grpid) {
+           sm_state[grpid]       = GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE;
+           blocklist_data[grpid].osd_epoch = 0;
+    };
 };
-
 
 
 struct NqnState {

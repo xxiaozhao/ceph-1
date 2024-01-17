@@ -67,8 +67,9 @@ public:
     return nonce_map;
   }
 
-  const GW_AVAILABILITY_E& get_availability() const { return availability; }
-  const BeaconSubsystems& get_subsystems() const { return subsystems; };
+  const GW_AVAILABILITY_E& get_availability()   const { return availability; }
+  const epoch_t&           get_last_osd_epoch() const { return last_osd_epoch; }
+  const BeaconSubsystems&  get_subsystems()     const { return subsystems; };
 
 private:
   ~MNVMeofGwBeacon() final {}
