@@ -110,9 +110,11 @@ struct NqnState {
     NqnState(const std::string& _nqn, const SM_STATE& sm_state, const GW_CREATED_T & gw_created) : nqn(_nqn)  {
         for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++){
             std::pair<GW_EXPORTED_STATES_PER_AGROUP_E, epoch_t> state_pair;
-            state_pair.first =  (sm_state[i] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE
+            state_pair.first = (  sm_state[i] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE
+			       || sm_state[i] == GW_STATES_PER_AGROUP_E::GW_OWNER_WAIT_FBACK_BLIST_CMPL
+			       || sm_state[i] == GW_STATES_PER_AGROUP_E::GW_WAIT_FOVER_BLIST_CMPL)
                            ? GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE
-                           : GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE);
+                           : GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE;
             state_pair.second = gw_created.blocklist_data[i].osd_epoch;
             ana_state.push_back(state_pair);
         }
