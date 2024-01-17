@@ -60,7 +60,7 @@ void test_MNVMeofGwMap() {
   std::string pool = "pool1";
   std::string group = "grp1";
   std::string gw_id = "GW1";
-  GW_STATE_T state(1);
+  GW_STATE_T state(1, 32);
   std::string nqn = "nqn";
   ANA_STATE ana_state;
   NqnState nqn_state(nqn, ana_state);

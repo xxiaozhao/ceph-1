@@ -33,6 +33,7 @@ protected:
     std::string       gw_group;
     BeaconSubsystems  subsystems;                           // gateway susbsystem and their state machine states
     GW_AVAILABILITY_E availability;                         // in absence of  beacon  heartbeat messages it becomes inavailable
+    epoch_t           last_osd_epoch;
 
 public:
   MNVMeofGwBeacon()
@@ -43,11 +44,12 @@ public:
         const std::string& gw_pool_,
         const std::string& gw_group_,
         const BeaconSubsystems& subsystems_,
-        const GW_AVAILABILITY_E& availability_
+        const GW_AVAILABILITY_E& availability_,
+        const epoch_t& last_osd_epoch_
   )
     : PaxosServiceMessage{MSG_MNVMEOF_GW_BEACON, 0, HEAD_VERSION, COMPAT_VERSION},
       gw_id(gw_id_), gw_pool(gw_pool_), gw_group(gw_group_), subsystems(subsystems_),
-      availability(availability_)
+      availability(availability_), last_osd_epoch(last_osd_epoch_)
   {}
 
   const std::string& get_gw_id() const { return gw_id; }
@@ -88,6 +90,7 @@ public:
       encode(st, payload);
     }
     encode((int)availability, payload);
+    encode((int)last_osd_epoch , payload);
     encode(version, payload); 
   }
 
@@ -109,9 +112,12 @@ public:
       subsystems.push_back(sub);
     }
     int tmp;
+    int last_epoch;
     decode(tmp, p);
     availability = static_cast<GW_AVAILABILITY_E>(tmp);
     decode(version, p);  
+    decode(last_epoch, p);
+    last_osd_epoch = (epoch_t)last_epoch;
   }
 
 private:

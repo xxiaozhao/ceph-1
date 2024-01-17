@@ -234,7 +234,7 @@ void NVMeofGw::send_beacon()
       pool,
       group,
       subs,
-      gw_availability);
+      gw_availability, 0);
   monc.send_mon_message(std::move(m));
 }
 
@@ -330,7 +330,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
       }
       ana_group_state gs;
       gs.set_grp_id(ana_grp_index + 1); // offset by 1, index 0 is ANAGRP1
-      gs.set_state(new_group_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
+      gs.set_state(new_group_state.first == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
       nas.mutable_states()->Add(std::move(gs));
       dout(0) << " grpid " << (ana_grp_index + 1) << " state: " << new_gw_state << dendl;
     }

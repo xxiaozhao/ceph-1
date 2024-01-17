@@ -25,9 +25,9 @@ inline std::ostream& operator<<(std::ostream& os, const GW_STATES_PER_AGROUP_E v
         case GW_STATES_PER_AGROUP_E::GW_IDLE_STATE: os << "IDLE "; break;
         case GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE: os << "STANDBY "; break;
         case GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE: os << "ACTIVE "; break;
-        case GW_STATES_PER_AGROUP_E::GW_BLOCKED_AGROUP_OWNER: os << "BLOCKED_AGROUP_OWNER "; break;
+        case GW_STATES_PER_AGROUP_E::GW_OWNER_WAIT_FBACK_BLIST_CMPL: os << "BLOCKED_AGROUP_OWNER "; break;
         case GW_STATES_PER_AGROUP_E::GW_WAIT_FAILBACK_PREPARED: os << "WAIT_FAILBACK_PREPARED "; break;
-        case GW_STATES_PER_AGROUP_E::GW_WAIT_FAILOVER_PREPARED: os << "WAIT_FAILOVER_PREPARED "; break;
+        case GW_STATES_PER_AGROUP_E::GW_WAIT_FOVER_BLIST_CMPL: os << "WAIT_FAILOVER_PREPARED "; break;
         default: os << "Invalid " << (int)value << " ";
     }
     return os;
@@ -79,7 +79,7 @@ inline std::ostream& operator<<(std::ostream& os, const NqnState value) {
 }
 
 inline std::ostream& operator<<(std::ostream& os, const GW_STATE_T value) {
-    os <<  "GW_STATE_T { group id: " << value.group_id
+    os <<  "GW_STATE_T { group id: " << value.group_id <<  " gw_map_epoch " <<  value.gw_map_epoch
         << " GwSubsystems: [ ";
     for (const auto& sub: value.subsystems) os << sub.second << " ";
     os << " ] }";
@@ -120,7 +120,7 @@ inline std::ostream& operator<<(std::ostream& os, const GW_ANA_NONCE_MAP value) 
 inline std::ostream& print_gw_created_t(std::ostream& os, const GW_CREATED_T value, size_t num_ana_groups) {
     os << "==Internal map ==GW_CREATED_T { ana_group_id " << value.ana_grp_id << " osd_epochs: ";
     for(size_t i = 0; i < num_ana_groups; i ++){
-        os << " " << value.blocklist_data[i].osd_epoch;
+        os << " " << value.blocklist_data[i].osd_epoch << ":" <<value.blocklist_data[i].epoch_changed ;
     }
     os << "\n" << MODULE_PREFFIX << "nonces: " << value.nonce_map << " }";
 
@@ -176,8 +176,10 @@ inline std::ostream& operator<<(std::ostream& os, const NVMeofGwMap value) {
 
 inline void encode(const ANA_STATE& st,  ceph::bufferlist &bl) {
     encode(st.size(), bl);
-    for (const auto& gr: st)
-        encode((int)gr, bl);
+    for (const auto& gr: st){
+        encode((int)gr.first, bl);
+        encode((int)gr.second, bl);
+    }
 }
 
 inline void decode(ANA_STATE& st, ceph::buffer::list::const_iterator &bl) {
@@ -186,8 +188,11 @@ inline void decode(ANA_STATE& st, ceph::buffer::list::const_iterator &bl) {
     st.resize(n);
     for (size_t i = 0; i < n; i++) {
         int a;
+        int b;
         decode(a, bl);
-        st[i] = (GW_EXPORTED_STATES_PER_AGROUP_E)a;
+        decode(b, bl);
+        st[i].first  = (GW_EXPORTED_STATES_PER_AGROUP_E)a;
+        st[i].second = (epoch_t)b;
     }
 }
 
@@ -215,14 +220,14 @@ inline  void decode(GwSubsystems& subsystems,  ceph::bufferlist::const_iterator&
 inline void encode(const GW_STATE_T& state,  ceph::bufferlist &bl) {
 
     encode(state.group_id, bl);
-    encode(state.version, bl);
+    encode(state.gw_map_epoch, bl);
     encode (state.subsystems, bl);
 }
 
 inline  void decode(GW_STATE_T& state,  ceph::bufferlist::const_iterator& bl) {
 
     decode(state.group_id, bl);
-    decode(state.version, bl);
+    decode(state.gw_map_epoch, bl);
     decode(state.subsystems, bl);
 }
 

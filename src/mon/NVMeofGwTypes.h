@@ -21,9 +21,9 @@ enum class GW_STATES_PER_AGROUP_E {
     GW_IDLE_STATE = 0, //invalid state
     GW_STANDBY_STATE,
     GW_ACTIVE_STATE,
-    GW_BLOCKED_AGROUP_OWNER,
+    GW_OWNER_WAIT_FBACK_BLIST_CMPL,
     GW_WAIT_FAILBACK_PREPARED,
-    GW_WAIT_FAILOVER_PREPARED // wait blocklist completed
+    GW_WAIT_FOVER_BLIST_CMPL
 };
 
 enum class GW_EXPORTED_STATES_PER_AGROUP_E {
@@ -44,7 +44,7 @@ enum class GW_AVAILABILITY_E {
 
 typedef GW_STATES_PER_AGROUP_E          SM_STATE         [MAX_SUPPORTED_ANA_GROUPS];
 
-using ANA_STATE = std::vector<GW_EXPORTED_STATES_PER_AGROUP_E>;
+using ANA_STATE = std::vector<std::pair<GW_EXPORTED_STATES_PER_AGROUP_E, epoch_t>>;
 
 struct BeaconNamespace {
     ANA_GRP_ID_T anagrpid;
@@ -65,36 +65,6 @@ struct BeaconSubsystem {
 
 using BeaconSubsystems = std::list<BeaconSubsystem>;
 
-struct NqnState {
-    std::string   nqn;          // subsystem NQN
-    ANA_STATE     ana_state;    // subsystem's ANA state
-
-    // constructors
-    NqnState(const std::string& _nqn, const ANA_STATE& _ana_state):
-        nqn(_nqn), ana_state(_ana_state)  {}
-    NqnState(const std::string& _nqn, const SM_STATE& sm_state) : nqn(_nqn)  {
-        for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++)
-            ana_state.push_back(sm_state[i] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE
-                           ? GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE
-                           : GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE);
-    }
-};
-
-typedef std::map<NQN_ID_T, NqnState> GwSubsystems;
-
-struct GW_STATE_T {
-    ANA_GRP_ID_T              group_id;
-    uint64_t                  version;                       // reserved for future usage TBD
-    GwSubsystems              subsystems;
-
-    GW_STATE_T(ANA_GRP_ID_T id):
-        group_id(id),
-        version(0)
-    {};
-
-    GW_STATE_T() : GW_STATE_T(REDUNDANT_GW_ANA_GROUP_ID) {};
-};
-
 using NONCE_VECTOR_T    = std::vector<std::string>;
 using GW_ANA_NONCE_MAP  = std::map <ANA_GRP_ID_T, NONCE_VECTOR_T>;
 
@@ -107,6 +77,7 @@ struct GW_CREATED_T {
     GW_ID_T            failover_peer[MAX_SUPPORTED_ANA_GROUPS];
     struct{
        epoch_t     osd_epoch;
+       bool        epoch_changed;
     }blocklist_data[MAX_SUPPORTED_ANA_GROUPS];
 
     GW_CREATED_T(): ana_grp_id(REDUNDANT_GW_ANA_GROUP_ID) {};
@@ -117,6 +88,7 @@ struct GW_CREATED_T {
             sm_state[i] = GW_STATES_PER_AGROUP_E::GW_STANDBY_STATE;
             failover_peer[i]  = "";
             blocklist_data[i].osd_epoch = 0xffffffff;
+            blocklist_data[i].epoch_changed = true;
         }
     };
 
@@ -125,6 +97,43 @@ struct GW_CREATED_T {
            failover_peer[grpid]  = "";
     };
 };
+
+
+
+struct NqnState {
+    std::string   nqn;          // subsystem NQN
+    ANA_STATE     ana_state;    // subsystem's ANA state
+
+    // constructors
+    NqnState(const std::string& _nqn, const ANA_STATE& _ana_state):
+        nqn(_nqn), ana_state(_ana_state)  {}
+    NqnState(const std::string& _nqn, const SM_STATE& sm_state, const GW_CREATED_T & gw_created) : nqn(_nqn)  {
+        for (int i=0; i < MAX_SUPPORTED_ANA_GROUPS; i++){
+            std::pair<GW_EXPORTED_STATES_PER_AGROUP_E, epoch_t> state_pair;
+            state_pair.first =  (sm_state[i] == GW_STATES_PER_AGROUP_E::GW_ACTIVE_STATE
+                           ? GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE
+                           : GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_INACCESSIBLE_STATE);
+            state_pair.second = gw_created.blocklist_data[i].osd_epoch;
+            ana_state.push_back(state_pair);
+        }
+    }
+};
+
+typedef std::map<NQN_ID_T, NqnState> GwSubsystems;
+
+struct GW_STATE_T {
+    ANA_GRP_ID_T              group_id;
+    epoch_t                   gw_map_epoch;
+    GwSubsystems              subsystems;
+
+    GW_STATE_T(ANA_GRP_ID_T id, epoch_t epoch):
+        group_id(id),
+        gw_map_epoch(epoch)
+    {};
+
+    GW_STATE_T() : GW_STATE_T(REDUNDANT_GW_ANA_GROUP_ID, 0) {};
+};
+
 
 
 
