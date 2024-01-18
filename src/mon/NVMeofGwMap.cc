@@ -571,6 +571,7 @@ int NVMeofGwMap::blocklist_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key, 
         int rc = addr_vect.parse(&str[0]);
         dout(4) << str << " rc " << rc <<  " network vector: " << addr_vect << " " << addr_vect.size() << dendl;
         epoch = mon->osdmon()->blocklist(addr_vect, until);
+        dout(4) << str << " mon->osdmon()->blocklist:  " << epoch <<  " address vector: " << addr_vect << " " << addr_vect.size() << dendl;
     }
     else{
         dout(4) << "Error: No nonces context present for gw: " <<gw_id  << " ANA group: " << grpid << dendl;

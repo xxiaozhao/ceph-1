@@ -91,8 +91,7 @@ public:
       encode(st, payload);
     }
     encode((int)availability, payload);
-    encode((int)last_osd_epoch , payload);
-    encode(version, payload); 
+    encode(last_osd_epoch , payload);
   }
 
   void decode_payload() override {
@@ -113,12 +112,9 @@ public:
       subsystems.push_back(sub);
     }
     int tmp;
-    int last_epoch;
     decode(tmp, p);
     availability = static_cast<GW_AVAILABILITY_E>(tmp);
-    decode(version, p);  
-    decode(last_epoch, p);
-    last_osd_epoch = (epoch_t)last_epoch;
+    decode(last_osd_epoch, p);
   }
 
 private:

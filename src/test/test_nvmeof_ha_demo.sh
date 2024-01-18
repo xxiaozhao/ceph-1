@@ -1,6 +1,7 @@
 ../src/stop.sh
 ../src/vstart.sh --new --without-dashboard --memstore
 ./bin/ceph osd pool create rbd 
+./bin/ceph osd pool application enable rbd rbd
 ./bin/rbd -p rbd create demo_image1 --size 10M
 ./bin/rbd -p rbd create demo_image2 --size 10M
 pushd ../src/nvmeof/gateway
