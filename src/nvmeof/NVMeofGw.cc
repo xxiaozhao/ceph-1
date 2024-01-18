@@ -366,7 +366,9 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
              completion_handler);
            return;
 	}
-	osdmap_epoch = blocklist_epoch;
+        if (blocklist_epoch > osdmap_epoch) {
+	  osdmap_epoch = blocklist_epoch;
+	}
         dout(0) << "Ready for blocklist osd map epoch: " << osdmap_epoch << dendl;
       }
       gs.set_state(new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
