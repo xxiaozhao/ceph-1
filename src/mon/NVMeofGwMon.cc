@@ -404,12 +404,11 @@ bool NVMeofGwMon::prepare_beacon(MonOpRequestRef op){
     if(sub.size() == 0) {
         avail = GW_AVAILABILITY_E::GW_UNAVAILABLE;
     }
-    else  {
-        pending_map.Created_gws[group_key][gw_id].subsystems = sub;
-    }
+    pending_map.Created_gws[group_key][gw_id].subsystems =  sub;
 
     if(avail == GW_AVAILABILITY_E::GW_AVAILABLE)
     {
+        //dout(4) <<"subsystems from beacon " << pending_map.Created_gws << dendl;
         auto now = ceph::coarse_mono_clock::now();
         // check pending_map.epoch vs m->get_version() - if different - drop the beacon
 
@@ -434,6 +433,7 @@ set_propose:
     if(!propose) {
       ack_map.Created_gws[group_key][gw_id] = map.Created_gws[group_key][gw_id];// respond with a map slice correspondent to the same GW
       ack_map.epoch = map.epoch;
+      //dout(4) << "Ack map! "<< ack_map.Created_gws << dendl;
       auto msg = make_message<MNVMeofGwMap>(ack_map);
       mon.send_reply(op, msg.detach());
     }

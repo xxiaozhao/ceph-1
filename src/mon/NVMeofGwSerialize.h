@@ -150,6 +150,11 @@ inline std::ostream& operator<<(std::ostream& os, const GW_CREATED_T value) {
     for (int i = 0; i < MAX_SUPPORTED_ANA_GROUPS; i++) {
         os << value.failover_peer[i] << ",";
     }
+    os <<  "]\n"<< MODULE_PREFFIX << " beacon-subsystems ";
+    for (const auto& sub: value.subsystems) {
+        os << sub << ",";
+    }
+
     os << "]\n"<< MODULE_PREFFIX << "availability " << value.availability << "]";
 
     return os;
@@ -290,6 +295,7 @@ inline void encode(const GW_CREATED_MAP& gws,  ceph::bufferlist &bl) {
             encode((gw.second.failover_peer[i]), bl);
         }
         encode((int)gw.second.availability, bl);
+        encode(gw.second.subsystems, bl);
 
         for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++){
             encode(gw.second.blocklist_data[i].osd_epoch, bl);
@@ -324,6 +330,9 @@ inline void decode(GW_CREATED_MAP& gws, ceph::buffer::list::const_iterator &bl) 
         int avail;
         decode(avail, bl);
         gw_created.availability = (GW_AVAILABILITY_E)avail;
+        BeaconSubsystems   subsystems;
+        decode(subsystems, bl);
+        gw_created.subsystems = subsystems;
 
         for(int i=0; i< MAX_SUPPORTED_ANA_GROUPS; i++){
             decode(gw_created.blocklist_data[i].osd_epoch, bl);

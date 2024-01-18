@@ -345,15 +345,29 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
       if (new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE &&
           blocklist_epoch != 0) {
         // Check if we need to wait for a newer OSD map before starting
+        dout(0) << "Check if ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
         bool const ready = objecter.with_osdmap(
           [blocklist_epoch](const OSDMap& o) {
+            dout(0) << "o.get_epoch:: " << o.get_epoch() << dendl;
             return o.get_epoch() >= blocklist_epoch;
           });
 	if (!ready) {
-           dout(0) << "Not ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
+          dout(0) << "Not ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
+	  // Define a lambda as a completion token
+          auto completion_handler = [](const boost::system::error_code& ec) {
+            if (!ec) {
+              dout(0) << "Check ready Async operation completed successfully." << dendl;
+            } else {
+              dout(0) << "Check ready Async operation failed: " << ec.message() << dendl;
+            }
+           };
+           objecter.wait_for_map(
+             blocklist_epoch,
+             completion_handler);
            return;
 	}
 	osdmap_epoch = blocklist_epoch;
+        dout(0) << "Ready for blocklist osd map epoch: " << osdmap_epoch << dendl;
       }
       gs.set_state(new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE ? OPTIMIZED : INACCESSIBLE); // Set the ANA state
       nas.mutable_states()->Add(std::move(gs));
