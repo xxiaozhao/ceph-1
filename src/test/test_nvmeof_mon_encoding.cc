@@ -19,6 +19,7 @@
 #include "global/global_init.h"
 #include "mon/NVMeofGwMon.h"
 #include "messages/MNVMeofGwMap.h"
+#include "messages/MNVMeofGwBeacon.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mon
@@ -101,6 +102,40 @@ void test_MNVMeofGwMap() {
   dout(0) << "decode msg: " << *msg << dendl;
 }
 
+void test_MNVMeofGwBeacon() {
+  std::string gw_id = "GW";
+  std::string gw_pool = "pool";
+  std::string gw_group = "group";
+  GW_AVAILABILITY_E availability = GW_AVAILABILITY_E::GW_AVAILABLE;
+  std::string nqn = "nqn";
+  BeaconSubsystem sub = { nqn, {}, {} };
+  BeaconSubsystems subs = { sub };
+  epoch_t osd_epoch = 17;
+
+  auto msg = make_message<MNVMeofGwBeacon>(
+      gw_id,
+      gw_pool,
+      gw_group,
+      subs,
+      availability,
+      osd_epoch);
+  msg->encode_payload(0);
+  msg->decode_payload();
+  dout(0) << "decode msg: " << *msg << dendl;
+  ceph_assert(msg->get_gw_id() == gw_id);
+  ceph_assert(msg->get_gw_pool() == gw_pool);
+  ceph_assert(msg->get_gw_group() == gw_group);
+  ceph_assert(msg->get_availability() == availability);
+  ceph_assert(msg->get_last_osd_epoch() == osd_epoch);
+  const auto& dsubs = msg->get_subsystems();
+  auto it = std::find_if(dsubs.begin(), dsubs.end(),
+                           [&nqn](const auto& element) {
+                               return element.nqn == nqn;
+                           });
+  ceph_assert(it != dsubs.end());
+}
+
+
 int main(int argc, const char **argv)
 {
   // Init ceph
@@ -113,5 +148,6 @@ int main(int argc, const char **argv)
   // Run tests
   test_NVMeofGwMap();
   test_MNVMeofGwMap();
+  test_MNVMeofGwBeacon();
 }
 
