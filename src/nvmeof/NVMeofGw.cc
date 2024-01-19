@@ -168,6 +168,7 @@ int NVMeofGw::init()
   client_messenger->set_myname(entity_name_t::MGR(whoami.v));
   objecter.set_client_incarnation(0);
   objecter.init();
+  objecter.enable_blocklist_events();
   objecter.start();
   client.init();
   timer.init();
@@ -346,6 +347,9 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
           blocklist_epoch != 0) {
         // Check if we need to wait for a newer OSD map before starting
         dout(0) << "Check if ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
+        std::set<entity_addr_t> newly_blocklisted;
+        objecter.consume_blocklist_events(&newly_blocklisted);
+        dout(0) << "Consumed new blocklists: " << newly_blocklisted << dendl;
         bool const ready = objecter.with_osdmap(
           [blocklist_epoch](const OSDMap& o) {
             dout(0) << "o.get_epoch:: " << o.get_epoch() << dendl;
