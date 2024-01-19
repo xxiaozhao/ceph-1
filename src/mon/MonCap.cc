@@ -210,7 +210,7 @@ void MonCapGrant::expand_profile(const EntityName& name) const
   if (profile == "mgr") {
     profile_grants.push_back(MonCapGrant("mgr", MON_CAP_ALL));
     profile_grants.push_back(MonCapGrant("log", MON_CAP_R | MON_CAP_W));
-    profile_grants.push_back(MonCapGrant("mon", MON_CAP_ALL));
+    profile_grants.push_back(MonCapGrant("mon", MON_CAP_R | MON_CAP_W));
     profile_grants.push_back(MonCapGrant("mds", MON_CAP_R | MON_CAP_W));
     profile_grants.push_back(MonCapGrant("fs", MON_CAP_R | MON_CAP_W));
     profile_grants.push_back(MonCapGrant("osd", MON_CAP_R | MON_CAP_W));
@@ -261,7 +261,7 @@ void MonCapGrant::expand_profile(const EntityName& name) const
       StringConstraint::MATCH_TYPE_EQUAL, "allow");
   }
   if (profile == "bootstrap-mgr") {
-    profile_grants.push_back(MonCapGrant("mon", MON_CAP_ALL));  // read monmap
+    profile_grants.push_back(MonCapGrant("mon", MON_CAP_R));  // read monmap
     profile_grants.push_back(MonCapGrant("osd", MON_CAP_R));  // read osdmap
     profile_grants.push_back(MonCapGrant("mon getmap"));
     profile_grants.push_back(MonCapGrant("auth get-or-create"));  // FIXME: this can expose other mgr keys
