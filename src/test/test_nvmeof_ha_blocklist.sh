@@ -20,7 +20,7 @@ for i in $(seq $ITERATIONS); do
 	docker logs $GW2_NAME 2>&1 | grep "$EXPECTED"
 	exit 0
     fi
-    echo "Waiting for: \"$EXPECTED\" on $GW2_NAME $GW2_IP"
+    echo "Waiting for $i secs for: \"$EXPECTED\" on $GW2_NAME $GW2_IP"
     sleep 1
 done
 echo "FAILED"
