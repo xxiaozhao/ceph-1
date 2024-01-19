@@ -121,8 +121,6 @@ int NVMeofGw::init()
   }
 
   monc.sub_want("NVMeofGw", 0, 0);
-  monc.sub_want("osdmap", 0, 0);
-
   monc.set_want_keys(CEPH_ENTITY_TYPE_MON|CEPH_ENTITY_TYPE_OSD
       |CEPH_ENTITY_TYPE_MDS|CEPH_ENTITY_TYPE_MGR);
   monc.set_messenger(client_messenger.get());
@@ -351,28 +349,19 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
         std::set<entity_addr_t> newly_blocklisted;
         objecter.consume_blocklist_events(&newly_blocklisted);
         dout(0) << "Consumed new blocklists: " << newly_blocklisted << dendl;
+        objecter.maybe_request_map(); // we might also consider this under tick()?
         bool const ready = objecter.with_osdmap(
           [blocklist_epoch](const OSDMap& o) {
             dout(0) << "o.get_epoch:: " << o.get_epoch() << dendl;
             return o.get_epoch() >= blocklist_epoch;
           });
-	if (!ready) {
+        if (!ready) {
           dout(0) << "Not ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
-	  // Define a lambda as a completion token
-          auto completion_handler = [](const boost::system::error_code& ec) {
-            if (!ec) {
-              dout(0) << "Check ready Async operation completed successfully." << dendl;
-            } else {
-              dout(0) << "Check ready Async operation failed: " << ec.message() << dendl;
-            }
-           };
-           objecter.wait_for_map(
-             blocklist_epoch,
-             completion_handler);
-           return;
-	}
+          return;
+        }
+        // Update latest accepted osdmap epoch, for beacons
         if (blocklist_epoch > osdmap_epoch) {
-	  osdmap_epoch = blocklist_epoch;
+          osdmap_epoch = blocklist_epoch;
 	}
         dout(0) << "Ready for blocklist osd map epoch: " << osdmap_epoch << dendl;
       }
