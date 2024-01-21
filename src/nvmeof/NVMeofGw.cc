@@ -345,6 +345,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
       if (new_agroup_state == GW_EXPORTED_STATES_PER_AGROUP_E::GW_EXPORTED_OPTIMIZED_STATE &&
           blocklist_epoch != 0) {
         // Check if we need to wait for a newer OSD map before starting
+	/*
         dout(0) << "Check if ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
         std::set<entity_addr_t> newly_blocklisted;
         objecter.consume_blocklist_events(&newly_blocklisted);
@@ -359,6 +360,7 @@ void NVMeofGw::handle_nvmeof_gw_map(ceph::ref_t<MNVMeofGwMap> nmap)
           dout(0) << "Not ready for blocklist osd map epoch: " << blocklist_epoch << dendl;
           return;
         }
+	*/
         // Update latest accepted osdmap epoch, for beacons
         if (blocklist_epoch > osdmap_epoch) {
           osdmap_epoch = blocklist_epoch;
