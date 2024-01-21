@@ -256,9 +256,15 @@ bool NVMeofGwMon::preprocess_command(MonOpRequestRef op)
         mon.reply_command(op, -EINVAL, rs, rdata, get_last_committed());
         return true;
     }
+
+    string prefix;
+    cmd_getval(cmdmap, "prefix", prefix);
+    dout(4) << "MonCommand : "<< prefix <<  dendl;
+
     MonSession *session = op->get_session();
     if (!session)
     {
+        dout(4) << "MonCommand : "<< prefix << " access denied due to lack of session" <<  dendl;
         mon.reply_command(op, -EACCES, "access denied", rdata,
                           get_last_committed());
         return true;
@@ -266,9 +272,6 @@ bool NVMeofGwMon::preprocess_command(MonOpRequestRef op)
     string format = cmd_getval_or<string>(cmdmap, "format", "plain");
     boost::scoped_ptr<Formatter> f(Formatter::create(format));
 
-    string prefix;
-    cmd_getval(cmdmap, "prefix", prefix);
-    dout(4) << "MonCommand : "<< prefix <<  dendl;
     // TODO   need to check formatter per preffix  - if f is NULL
 
     return false;
