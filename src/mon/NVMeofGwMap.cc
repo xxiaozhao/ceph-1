@@ -227,19 +227,9 @@ void  NVMeofGwMap::set_failover_gw_for_ANA_group(const GW_ID_T &failed_gw_id, co
 {
     GW_CREATED_T& gw_state = Created_gws[group_key][gw_id];
     gw_state.failover_peer[ANA_groupid] = failed_gw_id;
-    epoch_t epoch;
     dout(4) << "Set failower GW " << gw_id << " for ANA group " << (int)ANA_groupid << dendl;
-    int rc = blocklist_gw (failed_gw_id, group_key, ANA_groupid, epoch);
-    if(rc){
-        gw_state.active_state(ANA_groupid);
-        // temporary to be able to do integration before nonce implementation
-    }
-    else{
-        gw_state.sm_state[ANA_groupid] = GW_STATES_PER_AGROUP_E::GW_WAIT_FOVER_BLIST_CMPL;
-        gw_state.blocklist_data[ANA_groupid].osd_epoch = epoch;
-        gw_state.blocklist_data[ANA_groupid].epoch_changed = false;
-        start_timer(gw_id, group_key, ANA_groupid, 6); //start Failover preparation timer
-    }
+
+    gw_state.active_state(ANA_groupid);
 }
 
 void  NVMeofGwMap::find_failback_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key,   bool &some_found)
@@ -248,7 +238,6 @@ void  NVMeofGwMap::find_failback_gw(const GW_ID_T &gw_id, const GROUP_KEY& group
     bool  found_candidate = false;
     auto& gws_states = Created_gws[group_key];
     auto& gw_state = Created_gws[group_key][gw_id];
-    epoch_t epoch;
 
     for (auto& gw_state_it: gws_states) {
         auto& failback_gw_id = gw_state_it.first;
@@ -261,10 +250,6 @@ void  NVMeofGwMap::find_failback_gw(const GW_ID_T &gw_id, const GROUP_KEY& group
             start_timer(failback_gw_id, group_key, gw_state.ana_grp_id, 2);// Add timestamp of start Failback preparation
             gw_state.sm_state[gw_state.ana_grp_id] = GW_STATES_PER_AGROUP_E::GW_OWNER_WAIT_FBACK_BLIST_CMPL;
             found_candidate = true;
-            blocklist_gw (failback_gw_id, group_key, gw_state.ana_grp_id, epoch);
-            gw_state.blocklist_data[gw_state.ana_grp_id].osd_epoch = epoch;
-            gw_state.blocklist_data[gw_state.ana_grp_id].epoch_changed = false;
-
             break;
         }
         else if(st.sm_state[gw_state.ana_grp_id] == GW_STATES_PER_AGROUP_E::GW_WAIT_FOVER_BLIST_CMPL) {
@@ -347,48 +332,7 @@ void  NVMeofGwMap::find_failover_candidate(const GW_ID_T &gw_id, const GROUP_KEY
 
 void NVMeofGwMap::fsm_handle_gw_alive (const GW_ID_T &gw_id, const GROUP_KEY& group_key,  GW_CREATED_T & gw_state, GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid, epoch_t& last_osd_epoch, bool &map_modified)
 {
-    switch (state) {
-    case GW_STATES_PER_AGROUP_E::GW_WAIT_FOVER_BLIST_CMPL:
-    {
-        int timer_val = get_timer(gw_id, group_key, grpid);
-        // GW_ID_T  failed_gw = gw_state.failover_peer[grpid]; // ceph_assert(failed_gw != "NULL");
-        GW_CREATED_T& failover_gw_map = Created_gws[group_key][gw_id];
-        if(failover_gw_map.blocklist_data[grpid].epoch_changed == false){
-            if(failover_gw_map.blocklist_data[grpid].osd_epoch <= last_osd_epoch){
-                dout(4) << "failover: osd epoch changed from " << failover_gw_map.blocklist_data[grpid].osd_epoch << " to "<< last_osd_epoch
-                                       << " Ana grp: " << grpid  << " timer:" << timer_val << dendl;
-                gw_state.active_state(grpid);                   // Failover Gw still alive and guaranteed that
-                cancel_timer(gw_id, group_key, grpid);          // ana group wouldnt be taken back  during blocklist wait period
-                failover_gw_map.blocklist_data[grpid].epoch_changed = true;
-                map_modified = true;
-            }
-            else{
-                dout(4) << "failover: osd epoch not changed from " << failover_gw_map.blocklist_data[grpid].osd_epoch << " to "<< last_osd_epoch
-                                                   << " Ana grp: " << grpid  << " timer:" << timer_val << dendl;
-            }
-        }
-    }
-    break;
-    case GW_STATES_PER_AGROUP_E::GW_OWNER_WAIT_FBACK_BLIST_CMPL:
-    {
-        int timer_val = get_timer(gw_id, group_key, grpid);
-        GW_CREATED_T& failback_gw_map = Created_gws[group_key][gw_id];
-        if(failback_gw_map.blocklist_data[grpid].epoch_changed == false){
-            if(failback_gw_map.blocklist_data[grpid].osd_epoch <= last_osd_epoch){
-                   dout(4) << "failback: osd epoch changed from " << failback_gw_map.blocklist_data[grpid].osd_epoch << " to "<< last_osd_epoch
-                                          << " Ana grp: " << grpid  << " timer:" << timer_val << dendl;
-            }
-            else{
-                dout(4) << "failback: osd epoch not changed from " << failback_gw_map.blocklist_data[grpid].osd_epoch << " to "<< last_osd_epoch
-                                                   << " Ana grp: " << grpid  << " timer:" << timer_val << dendl;
-            }
-        }
 
-    } break;
-
-    default:
-        break;
-    }
 }
 
  void NVMeofGwMap::fsm_handle_gw_down(const GW_ID_T &gw_id, const GROUP_KEY& group_key,   GW_STATES_PER_AGROUP_E state, ANA_GRP_ID_T grpid,  bool &map_modified)
@@ -509,8 +453,8 @@ void NVMeofGwMap::fsm_handle_to_expired(const GW_ID_T &gw_id, const GROUP_KEY& g
         for (auto& gw_state: Created_gws[group_key]) {
             auto& st = gw_state.second;
             if (st.sm_state[grpid] == GW_STATES_PER_AGROUP_E::GW_OWNER_WAIT_FBACK_BLIST_CMPL &&
-                    st.availability == GW_AVAILABILITY_E::GW_AVAILABLE &&
-                    st.blocklist_data[grpid].epoch_changed ==true)
+                    st.availability == GW_AVAILABILITY_E::GW_AVAILABLE) //&&
+                    //st.blocklist_data[grpid].epoch_changed ==true)
             {                             //TODO process the scenario when timer expired but epoch_changed = false
                                           // propose to make 2 retries with arming of timer if not helps - to assert
                 dout(4)  << "Expired Failback timer from GW " << gw_id << " ANA groupId "<< grpid << "osd epoch "  << st.blocklist_data[grpid].osd_epoch  << dendl;
@@ -552,32 +496,7 @@ GW_CREATED_T& NVMeofGwMap::find_already_created_gw(const GW_ID_T &gw_id, const G
 
 int NVMeofGwMap::blocklist_gw(const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T grpid, epoch_t &epoch)
 {
-    GW_CREATED_T& gw_map =  Created_gws[group_key][gw_id];  //find_already_created_gw(gw_id, group_key);
-
-     if (gw_map.nonce_map[grpid].size() > 0){
-        NONCE_VECTOR_T &nonce_vector = gw_map.nonce_map[grpid];
-        std::string str = "[";
-        entity_addrvec_t addr_vect;
-        //auto until = ceph_clock_now();  // until += g_conf().get_val<double>("mon_mgr_blocklist_interval"); // 1day - TODO
-        utime_t until(30,0);
-        dout(4) << "until timestamp before now " << until << dendl;
-        until += ceph_clock_now();
-        dout(4) << "until timestamp " << until << dendl;
-        for(auto &it: nonce_vector ){
-            if(str != "[") str += ",";
-            str += it;
-        }
-        str += "]";
-        int rc = addr_vect.parse(&str[0]);
-        dout(4) << str << " rc " << rc <<  " network vector: " << addr_vect << " " << addr_vect.size() << dendl;
-        epoch = mon->osdmon()->blocklist(addr_vect, until);
-        dout(4) << str << " mon->osdmon()->blocklist:  " << epoch <<  " address vector: " << addr_vect << " " << addr_vect.size() << dendl;
-    }
-    else{
-        dout(4) << "Error: No nonces context present for gw: " <<gw_id  << " ANA group: " << grpid << dendl;
-        return 1;
-    }
-    return 0;
+    return 1;
 }
 
 void NVMeofGwMap::start_timer(const GW_ID_T &gw_id, const GROUP_KEY& group_key, ANA_GRP_ID_T anagrpid, uint8_t value) {
