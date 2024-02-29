@@ -18,6 +18,7 @@ import { CellTemplate } from '~/app/shared/enum/cell-template.enum';
 import { MultiCluster } from '~/app/shared/models/multi-cluster';
 import { SummaryService } from '~/app/shared/services/summary.service';
 import { Router } from '@angular/router';
+import { DurationPipe } from '~/app/shared/pipes/duration.pipe';
 
 @Component({
   selector: 'cd-multi-cluster-list',
@@ -48,6 +49,7 @@ export class MultiClusterListComponent {
     public actionLabels: ActionLabelsI18n,
     private notificationService: NotificationService,
     private authStorageService: AuthStorageService,
+    private durationPipe: DurationPipe,
     private modalService: ModalService
   ) {
     this.tableActions = [
@@ -125,6 +127,12 @@ export class MultiClusterListComponent {
         prop: 'user',
         name: $localize`User`,
         flexGrow: 2
+      },
+      {
+        prop: 'ttl',
+        name: $localize`Time left to expire`,
+        flexGrow: 2,
+        pipe: this.durationPipe
       }
     ];
 
@@ -138,13 +146,12 @@ export class MultiClusterListComponent {
     if (this.clusterTokenStatus && this.data) {
       this.data.forEach((cluster: MultiCluster) => {
         const clusterStatus = this.clusterTokenStatus[cluster.name];
-
         if (clusterStatus !== undefined) {
           cluster.cluster_connection_status = clusterStatus.status;
+          cluster.ttl = clusterStatus.time_left;
         } else {
           cluster.cluster_connection_status = 2;
         }
-
         if (cluster.cluster_alias === 'local-cluster') {
           cluster.cluster_connection_status = 0;
         }
@@ -194,6 +201,18 @@ export class MultiClusterListComponent {
             NotificationType.success,
             $localize`Disconnected cluster '${cluster['cluster_alias']}'`
           );
+          this.multiClusterService.refresh();
+          this.summaryService.refresh();
+          const currentRoute = this.router.url.split('?')[0];
+          if (currentRoute.includes('dashboard')) {
+            this.router.navigateByUrl('/pool', { skipLocationChange: true }).then(() => {
+              this.router.navigate([currentRoute]);
+            });
+          } else {
+            this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+              this.router.navigate([currentRoute]);
+            });
+          }
         })
     });
   }
